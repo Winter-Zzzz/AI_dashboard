@@ -1,74 +1,22 @@
 import React from 'react';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Slider from '@mui/material/Slider';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Checkbox from '@mui/material/Checkbox';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { mobileAndDesktopOS, valueFormatter } from '../dataset/webUsageStats';
 
 export default function PieChartComponent() {
-  const [radius, setRadius] = React.useState(50);
-  const [itemNb, setItemNb] = React.useState(5);
-  const [skipAnimation, setSkipAnimation] = React.useState(false);
-
-  const handleItemNbChange = (event, newValue) => {
-    if (typeof newValue !== 'number') {
-      return;
-    }
-    setItemNb(newValue);
-  };
-  const handleRadius = (event, newValue) => {
-    if (typeof newValue !== 'number') {
-      return;
-    }
-    setRadius(newValue);
-  };
-
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ width: '70%' }}>
       <PieChart
         height={300}
         series={[
           {
-            data: mobileAndDesktopOS.slice(0, itemNb),
-            innerRadius: radius,
-            arcLabel: (params) => params.label ?? '',
+            data: mobileAndDesktopOS, // 모든 데이터 사용
+            innerRadius: 0, // 기본값으로 설정
+            arcLabel: (params) => params.label ?? '', // 레이블 설정
             arcLabelMinAngle: 20,
             valueFormatter,
           },
         ]}
-        skipAnimation={skipAnimation}
-      />
-      <FormControlLabel
-        checked={skipAnimation}
-        control={
-          <Checkbox onChange={(event) => setSkipAnimation(event.target.checked)} />
-        }
-        label="skipAnimation"
-        labelPlacement="end"
-      />
-      <Typography id="input-item-number" gutterBottom>
-        Number of items
-      </Typography>
-      <Slider
-        value={itemNb}
-        onChange={handleItemNbChange}
-        valueLabelDisplay="auto"
-        min={1}
-        max={8}
-        aria-labelledby="input-item-number"
-      />
-      <Typography id="input-radius" gutterBottom>
-        Radius
-      </Typography>
-      <Slider
-        value={radius}
-        onChange={handleRadius}
-        valueLabelDisplay="auto"
-        min={15}
-        max={100}
-        aria-labelledby="input-radius"
       />
     </Box>
   );
