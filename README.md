@@ -18,9 +18,9 @@ The core of AI_dashboard is a locally hosted desktop application that allows use
 
 The platform's architecture is built on direct blockchain integration that connects to Hyperledger Fabric through gRPC, ensuring data integrity by eliminating potential points of corruption in the data transmission process. The fine-tuned AI model translates natural language requests into executable queries, allowing users to extract meaningful insights from blockchain data without requiring expertise in programming languages or blockchain technology.
 
-This document will detail the AI model development process for AI_dashboard. We will explain step-by-step the entire process, from the methodology of collecting training data using the latest generative AI models such as GPT-4 and Claude, to attempting fine-tuning on various language models like BERT, RoBERTa, and T5 using the collected data, and comparing and analyzing the performance of each model to derive the optimal model.
+This document will detail the AI model development process for AI_dashboard. We will explain step-by-step the entire process, from data augmentation using advanced language models like GPT-4o and Claude to generate variations of human-annotated blockchain query datasets - allowing us to systematically expand our limited initial dataset while preserving the semantic integrity of expert-validated queries - through to fine-tuning language models using this enriched data. This approach combines the efficiency of AI-powered augmentation with the reliability of human-validated blockchain queries to create a comprehensive training dataset.
 
-Our solution eliminates intermediary-related data corruption risks, improves accessibility for non-technical users, maintains data integrity through blockchain immutability, provides real-time data analysis capabilities, reduces dependence on specialized technical personnel, and ensures secure local processing of sensitive information.
+Our solution eliminates intermediary-related data corruption risks, improves accessibility for non-technical users, maintains data integrity through blockchain immutability, provides real-time data analysis capabilities, and ensures secure local processing of sensitive information.
 
 ## Datasets
 

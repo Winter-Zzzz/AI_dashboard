@@ -19,6 +19,12 @@
     "@mui/x-charts": "^7.22.2",
     "electron": "^33.2.0",
     "global": "^4.4.0"
+    "ajv-keywords": "^5.1.0",
+    "d3": "^7.9.0",
+    "electron": "^33.2.0",
+    "global": "^4.4.0",
+    "memfs": "^4.14.0",
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.0.0",
