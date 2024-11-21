@@ -2,7 +2,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const path = require('path');
 
 module.exports = {
-  entry: './client.js',  // 엔트리 파일 설정
+  entry: './App.js',  // 엔트리 파일 설정
   output: {
     path: path.resolve(__dirname, 'dist'),  // 출력 경로
     filename: 'app.js',  // 출력 파일 이름
