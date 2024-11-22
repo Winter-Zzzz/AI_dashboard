@@ -60,6 +60,78 @@ To enhance the diversity and flexibility of natural language commands, we use Op
     - Enhances the model's ability to understand varied user inputs.
     - Prepares the system for real-world applications by accommodating different linguistic nuances.
 
+### Model Fine-tuning process
+
+1. Pre-training Model Selection
+    - Base Model: T5-base
+    - Rationale: Text-to-text framework 
+
+2. Dataset Preparation
+    - Source- Source: "translate to query: {command}"
+    - Target: Blockchain query
+    - Format: instruction-input-output pairs    
+
+3. Fine-tuning Implementation
+    ```python
+    # Initiate tokenizer and model
+    tokenizer = T5Tokenizer.from_pretrained('t5-base')
+    model = T5ForConditionalGeneration.from_pretrained('t5-base')
+
+    # Preprocess Data
+    def preprocess_data(examples):
+        inputs = ["translate to query: " + text for text in examples["command"]]
+        
+        model_inputs = tokenizer(
+            inputs,
+            max_length=128,
+            truncation=True,
+            padding="max_length",
+            return_tensors="pt"
+        )
+        
+        labels = tokenizer(
+            examples["query"],
+            max_length=128,
+            truncation=True,
+            padding="max_length",
+            return_tensors="pt"
+        )
+        
+        return {
+            "input_ids": model_inputs["input_ids"],
+            "attention_mask": model_inputs["attention_mask"],
+            "labels": labels["input_ids"]
+        }
+
+    # Training configurations
+    training_args = TrainingArguments(
+        output_dir="./t5-blockchain-query",
+        num_train_epochs=3,
+        per_device_train_batch_size=8,
+        learning_rate=3e-4,
+        weight_decay=0.01,
+        logging_steps=100,
+    )
+
+    # Initialize trainer with model and training configurations
+    trainer = Trainer(
+        model=model,                
+        args=training_args,         
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset, 
+        tokenizer=tokenizer,
+    )
+
+    # Start the fine-tuning process
+    trainer.train()
+    ```
+
+The training process will:
+- Update the model weights using the specified learning rate
+- Log training progress at regular intervals
+- Save model checkpoints according to the specified strategy
+- Monitor training metrics for optimization
+
 ## Evaluation
 
 tbd ...
