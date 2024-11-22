@@ -1,26 +1,33 @@
 import React from 'react';
 import { BarChart } from '@mui/x-charts/BarChart';
-import {dataset, valueFormatter } from '../dataset/weather';
-
-const chartSetting = {
-    xAxis: [
-        {
-            label: 'rainfall (mm)',
-        },
-    ],
-    width: 500,
-    height: 400,
-};
+import { dataset, valueFormatter } from '../dataset/transactions';
+import { CHART_DIMENSIONS } from './chartDimensions';
 
 export default function BarChartComponent() {
-    return (
-        <BarChart
-            dataset = {dataset}
-            yAxis={[{ scaleType: 'band', dataKey: 'month'}]}
-            series={[{dataKey: 'seoul', label: 'Seoul rainfall', valueFormatter }]}
-            layout="horizontal"
-            grid={{ vertical: true }}
-            {...chartSetting}
-        />
-    );
+
+    const chartSetting = {
+        xAxis: [
+            {
+                label: 'transactions',
+            },
+        ],
+        width: CHART_DIMENSIONS.width,
+        height: CHART_DIMENSIONS.height,
+        margin: CHART_DIMENSIONS.margin
+    };
+
+    return ( <BarChart
+        dataset = {dataset}
+        yAxis={[{ scaleType: 'band', dataKey: 'pk'}]}
+        xAxis={[{ 
+            label: 'Transaction Count',
+            min: 0,
+            max: 12,
+            tickSize: 10,
+          }]}
+        series={[{dataKey: 'transactions', label: 'Transactions by PK', valueFormatter, color: '#4DB6AC'}]}
+        layout="horizontal"
+        {...chartSetting}
+    />
+);
 }
