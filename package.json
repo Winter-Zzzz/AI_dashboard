@@ -1,0 +1,10 @@
+{
+    "name": "ai_dashboard_root",
+    "version": "1.0.0",
+    "description": "A dashboard for Matter Tunnel that can be queried via natural language",
+    "scripts": {
+      "start": "cd frontend && npm start",
+      "build": "cd frontend && npm run build",
+      "install-deps": "cd frontend && npm install"
+    }
+  }

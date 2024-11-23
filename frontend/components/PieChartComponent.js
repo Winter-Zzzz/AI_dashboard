@@ -13,15 +13,15 @@ export default function PieChartComponent() {
   return (
     <Box sx={{ 
       width: CHART_DIMENSIONS.width, 
-      height: CHART_DIMENSIONS.height+ 50, 
-      position: 'reltaive' 
+      height: CHART_DIMENSIONS.height, 
+      position: 'relative', 
     }}>
       <Typography variant="h6" align="center" sx={{ mb: 2 }}>
         TPS Distribution by Time Period
       </Typography>
       <PieChart
         width={CHART_DIMENSIONS.width}
-        height={CHART_DIMENSIONS.height}
+        height={CHART_DIMENSIONS.height-55}
         series={[
           {
             data: chartData,
@@ -33,8 +33,9 @@ export default function PieChartComponent() {
             faded: { innerRadius: 0, additionalRadius: -30, color: 'gray' },
             arcLabel: (item) => `${item.label}`,
             arcLabelMinAngle: 20,
+            arcLabelRadius: 70,
             valueFormatter,
-            outerRadius: 160
+            outerRadius: 120
           },
         ]}
         legend={{
