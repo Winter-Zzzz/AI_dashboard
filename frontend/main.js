@@ -6,8 +6,9 @@ const isDev = process.env.NODE_ENV === 'development' || process.defaultApp;
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 900,
+    fullscreen: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,

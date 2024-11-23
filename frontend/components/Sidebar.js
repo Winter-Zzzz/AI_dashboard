@@ -1,63 +1,125 @@
-import React from 'react';
+import React, { useState } from 'react';
+import {
+    Home, Package, Users, ShoppingCart, BarChart2, Megaphone,
+    Tag, Wallet, FileText, Calendar, Store
+} from 'lucide-react';
 
-const Sidebar = ({ activeMenu, onMenuClick } ) => {
+const styles = {
+    sidebar: {
+        width: '256px',
+        height: '100%',
+        backgroundColor: 'white',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+    },
+    menuItem: {
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '30px 24px',
+        color: '#4B5563',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease'
+    },
+    menuItemActive: {
+        backgroundColor: '#F9FAFB',
+        color: '#A50034'
+    },
+    icon: {
+        width: '20px',
+        height: '20px'
+    },
+    label: {
+        marginLeft: '16px',
+        fontSize: '16px',
+        fontWeight: '500'
+    },
+    highlight: {
+        position: 'absolute',
+        left: 0,
+        width: '4px',
+        height: '32px',
+        backgroundColor: '#A50034',
+        borderTopRightRadius: '4px',
+        borderBottomRightRadius: '4px',
+        opacity: 0,
+        transition: 'opacity 0.2s ease'
+    },
+    highlightActive: {
+        opacity: 1
+    }
+};
+
+const Sidebar = () => {
+    const [activeItem, setActiveItem] = useState(null);
+
     const menuItems = [
-        { id: 'Dashboard', icon: '🏠', label: 'Dashboard' },
-        { id: 'Products', icon: '📦', label: 'Products' },
-        { id: 'Customers', icon: '👥', label: 'Customers' },
-        { id: 'Orders', icon: '🛍️', label: 'Orders' },
-        { id: 'Analytics', icon: '📊', label: 'Analytics' },
-        { id: 'Marketing', icon: '📢', label: 'Marketing' },
-        { id: 'Discounts', icon: '🏷️', label: 'Discounts' },
-        { id: 'Payouts', icon: '💰', label: 'Payouts' },
-        { id: 'Statements', icon: '📄', label: 'Statements' },
-        { id: 'Calendar', icon: '📅', label: 'Calendar' },
-        { id: 'Storefront', icon: '🏪', label: 'Storefront' }
-    ]
+        { id: 'dashboard', icon: Home, label: 'Dashboard' },
+        { id: 'products', icon: Package, label: 'Products' },
+        { id: 'customers', icon: Users, label: 'Customers' },
+        { id: 'orders', icon: ShoppingCart, label: 'Orders' },
+        { id: 'analytics', icon: BarChart2, label: 'Analytics' },
+        { id: 'marketing', icon: Megaphone, label: 'Marketing' },
+        { id: 'discounts', icon: Tag, label: 'Discounts' },
+        { id: 'payouts', icon: Wallet, label: 'Payouts' },
+        { id: 'statements', icon: FileText, label: 'Statements' },
+        { id: 'calendar', icon: Calendar, label: 'Calendar' },
+        { id: 'storefront', icon: Store, label: 'Storefront' }
+    ];
+
+    const handleMouseEnter = (e) => {
+        if (e.currentTarget.id !== activeItem) {
+            e.currentTarget.style.backgroundColor = 'F9FAFB';
+            e.currentTarget.style.color = "#A50034";
+            e.currentTarget.querySelector('.highlight').style.opacity = '1';
+        }
+    };
+
+    const handleMouseLeave = (e) => {
+        if (e.currentTarget.id !== activeItem) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = '#4B5563';
+            e.currentTarget.querySelector('.highlight').style.opacity = '0';
+        }
+    };
+
+    const handleClick = (id) => {
+        setActiveItem(id);
+    };
 
     return (
-        <div style={{
-            width: '250px',
-            height: '100%',
-            backgroundColor: '#ffffff',
-            borderRight: '1px solid black',
-            padding: '60px 0',
-            position: 'fixed',
-            fontSize: '20px',
-        }}>
-            {menuItems.map((item) => (
-                <div
-                    key = {item.id}
-                    onClick={() => onMenuClick(item.id)}
-                    style = {{
-                        padding: '15px 20px',
-                        cursor: 'pointer',
-                        backgroundColor: activeMenu === item.id ? '#2a2a2a' : 'transparent',
-                        color: activeMenu === item.id ? 'white' : 'inherit',
-                        display: 'flex',
-                        alignItems: 'center', 
-                        gap: '10px', 
-                        transition: 'background-color 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                        if (activeMenu !== item.id) {
-                            e.currentTarget.style.backgroundColor = '#f5f5f5';
-                        }
-                    }}
-                    onMouseLeave={(e) => {
-                        if (activeMenu !== item.id) {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                        }
-                    }}
-                >
-                    <span>{item.icon}</span>
-                    <span>{item.label}</span>
-                </div>
-            ))}
+        <div style={styles.sidebar}>
+            <nav style={styles.nav}>
+                {menuItems.map((item, index) => {
+                    const isActive = activeItem === item.id;
+                    const itemStyle = {
+                        ...styles.menuItem,
+                        ...(isActive && styles.menuItemActive)
+                    };
+
+                    return (
+                        <div
+                            key={item.id}
+                            id={item.id}
+                            style={itemStyle}
+                            onMouseEnter={handleMouseEnter}
+                            onMouseLeave={handleMouseLeave}
+                            onClick={() => handleClick(item.id)}
+                        >
+                            <div 
+                                className="highlight" 
+                                style={{
+                                   ...styles.highlight,
+                                   ...(isActive && styles.highlightActive)
+                                }}
+                            />
+                        <item.icon style={styles.icon} />
+                        <span style={styles.label}>{item.label}</span>
+                    </div>
+                    );
+                })}
+            </nav>
         </div>
     );
 };
-
-
 
 export default Sidebar;
