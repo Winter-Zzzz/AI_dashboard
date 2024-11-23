@@ -33,7 +33,7 @@ export default function TPSChart() {
             dataKey: 'tps',
             curve: "linear",
             showMark: true,
-            color: '#4DB6AC',
+            color: '#A50034',
             markerSize: 6
           }
         ]}

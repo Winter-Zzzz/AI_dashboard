@@ -18,14 +18,14 @@ export default function BarChartComponent() {
 
     return ( <BarChart
         dataset = {dataset}
-        yAxis={[{ scaleType: 'band', dataKey: 'pk'}]}
+        yAxis={[{ scaleType: 'band', dataKey: 'pk', barGapRatio: 0.8}]}
         xAxis={[{ 
             label: 'Transaction Count',
             min: 0,
             max: 12,
             tickSize: 10,
           }]}
-        series={[{dataKey: 'transactions', label: 'Transactions by PK', valueFormatter, color: '#4DB6AC'}]}
+        series={[{dataKey: 'transactions', label: 'Transactions by PK', valueFormatter, color: '#748BA7' }]}
         layout="horizontal"
         {...chartSetting}
     />
