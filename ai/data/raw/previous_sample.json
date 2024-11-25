@@ -1,0 +1,24 @@
+{
+    "dataset": [
+        {
+            "input": "Query the transactions sent by 04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d to 04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de602",
+            "output": "const src_pk='04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d';const pk='04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de602';const result=data.filter(item=>item.pk===src_pk).flatMap(item=>item.transactions).filter(tx=>tx.src_pk===pk);console.log(result);"
+        },
+        {
+            "input": "Get all transactions sent to pk 04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60e",
+            "output": "const pk='04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60e';const result=data.flatMap(item=>item.transactions).filter(tx=>tx.src_pk===pk);console.log(result);"
+        },
+        {
+            "input": "Show the oldest transaction for 14750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d",
+            "output": "const result=data.filter(item=>item.pk==='14750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d').flatMap(item=>item.transactions).reduce((oldest,current)=>(current.timestamp<oldest.timestamp?current:oldest),data[0].transactions[0]);console.log(result);"
+        },
+        {
+            "input": "Show all transactions from 24750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d sorted by most recent first",
+            "output": "const result=data.filter(item=>item.pk==='24750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d').flatMap(item=>item.transactions).sort((a,b)=>b.timestamp-a.timestamp);console.log(result);"
+        },
+        {
+            "input": "List all transactions received by 54750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d",
+            "output": "const dest='54750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d';const result=data.flatMap(item=>item.transactions).filter(tx=>tx.src_pk===dest);console.log(result);"
+        }
+    ]
+}

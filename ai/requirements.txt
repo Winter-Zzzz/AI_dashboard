@@ -1,0 +1,46 @@
+# 딥러닝 및 모델 관련
+torch==2.5.1
+transformers==4.46.3
+tensorflow==2.18.0
+keras==3.6.0
+sentencepiece==0.2.0
+tensorboard==2.18.0
+huggingface-hub==0.26.2
+
+# 자연어 처리
+nltk==3.9.1
+nlpaug==1.1.11
+tokenizers==0.20.3
+
+# 데이터 처리 및 과학 계산
+numpy==2.0.2
+pandas==2.2.3
+scipy>=1.11.0
+sympy==1.13.1
+
+# JavaScript 실행 환경
+node-vm2>=3.9.0
+
+# 유틸리티
+tqdm==4.67.0
+requests==2.32.3
+python-dateutil==2.9.0.post0
+urllib3==2.2.3
+PyYAML==6.0.2
+filelock==3.16.1
+fsspec==2024.10.0
+
+# 도구 및 포맷팅
+click==8.1.7
+rich==13.9.4
+Jinja2==3.1.4
+Markdown==3.7
+MarkupSafe==3.0.2
+
+# 기타 의존성
+typing_extensions==4.12.2
+packaging==24.2
+protobuf==5.28.3
+six==1.16.0
+certifi==2024.8.30
+charset-normalizer==3.4.0

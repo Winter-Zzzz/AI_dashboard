@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON Fetch Example</title>
+</head>
+<body>
+  <h1>JSON Fetch Example</h1>
+  <div id="json-output"></div>
+
+  <script>
+    fetch('./transaction_test.json')  // JSON 파일 경로 (같은 디렉토리에서 파일 불러오기)
+      .then(response => response.json())
+      .then(data => {
+        console.log("파일을 성공적으로 불러왔습니다:", data);
+        document.getElementById('json-output').innerText = JSON.stringify(data, null, 2);  // 불러온 데이터를 페이지에 표시
+      })
+      .catch(error => {
+        console.error("파일을 불러오는 중 오류가 발생했습니다:", error);
+      });
+  </script>
+</body>
+</html>
