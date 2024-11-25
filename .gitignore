@@ -1,6 +1,28 @@
 # macOS 시스템 파일 무시
 .DS_Store
 
+# 가상 환경
+venv/
+
+# Python 캐시 및 설정
+__pycache__/
+*.pyc
+*.pyo
+
+# VSCode 설정 파일
+.vscode/
+
+# 로그 및 임시 파일
+logs/
+*.log
 
 # Node.js 종속성 무시
 node_modules/
+
+# 모델 파일
+*.h5
+*.pt
+*.ckpt
+*.bin
+best_model/
+model_backups/
