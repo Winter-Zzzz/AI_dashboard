@@ -34,7 +34,7 @@ module.exports = {
     })
   ],
   devServer: {
-    port: 8080,  // 개발 서버 포트
+    port: 4000,  // 개발 서버 포트
     hot: true,  // Hot Module Replacement 활성화
     open: false  // 서버 시작 시 자동으로 브라우저 열지 않기
   },
