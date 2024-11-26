@@ -15,47 +15,35 @@ sys.path.append(PROJECT_ROOT)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {DEVICE}")
 
-class CodeGeneratorConfig:
-    def __init__(self):
-        self.BASE_MODEL_NAME = ModelConfig.MODEL_NAME  # 't5-base'
-        self.MODEL_NAME = ModelConfig.MODEL_NAME  # 't5-base'
-        self.MODEL_PATH = Path("models/best_model")  # best_model 경로 설정
-        self.DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
-        # 모델 입력 및 출력 길이 설정
-        self.MAX_INPUT_LENGTH = ModelConfig.MAX_LENGTH
-        self.MAX_OUTPUT_LENGTH = ModelConfig.MAX_GEN_LENGTH
-        
-        # 생성 파라미터 설정
-        self.NUM_BEAMS = ModelConfig.NUM_BEAMS
-        self.TEMPERATURE = ModelConfig.TEMPERATURE
-        self.TOP_P = ModelConfig.TOP_P
-
-def create_test_directory():
-    """테스트 디렉토리 생성"""
-    test_dir = os.path.join(os.path.dirname(__file__), 'test')
-    os.makedirs(test_dir, exist_ok=True)
-    return test_dir
-
-def load_json_data(json_path: str) -> dict:
-    """JSON 데이터 로드 함수"""
-    try:
-        print(f"JSON 파일 경로: {json_path}")
-        with open(json_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"JSON 파일을 찾을 수 없습니다: {json_path}")
-        return {"transactions": []}
-    except Exception as e:
-        print(f"JSON 파일 로드 중 에러 발생: {str(e)}")
-        return None
+def clean_generated_text(text: str) -> str:
+    # 특수 토큰 제거
+    special_tokens = ["<pad>", "</s>"]
+    for token in special_tokens:
+        text = text.replace(token, "")
+    
+    # 불필요한 공백 제거
+    text = " ".join(text.split())
+    
+    # 괄호, 점 주변의 공백 제거
+    text = text.replace(" (", "(")
+    text = text.replace(" )", ")")
+    text = text.replace(" .", ".")
+    text = text.replace(" [", "[")
+    text = text.replace(" ]", "]")
+    text = text.replace(" :", ":")
+    text = text.replace(" ,", ",")
+    
+    # 앞뒤 공백 제거
+    text = text.strip()
+    return text
 
 def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer: T5Tokenizer) -> str:
-    """코드 생성 함수"""
+    config = ModelConfig()
+    
     inputs = tokenizer(
         input_text, 
         return_tensors="pt", 
-        max_length=128, 
+        max_length=config.MAX_LENGTH,  # MAX_INPUT_LENGTH 대신 MAX_LENGTH 사용
         padding=True, 
         truncation=True
     )
@@ -66,17 +54,18 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
         outputs = model.generate(
             input_ids=inputs['input_ids'],
             attention_mask=inputs['attention_mask'],
-            max_length=256,
-            num_beams=5,
-            temperature=0.7,
-            top_p=0.95,
-            do_sample=True
+            max_length=config.MAX_GEN_LENGTH,
+            num_beams=config.NUM_BEAMS,
+            temperature=config.TEMPERATURE,
+            top_p=config.TOP_P,
+            do_sample=True,
+            no_repeat_ngram_size=2,
+            early_stopping=True
         )
     
     outputs = outputs.cpu()
-    generated_code = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-    return generated_code.strip()
+    generated_code = tokenizer.decode(outputs[0])
+    return clean_generated_text(generated_code)
 
 def execute_code(code: str, data: dict):
     """Python 코드 실행 함수"""
@@ -123,30 +112,51 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
 
 def main():
     """메인 함수"""
-    config = CodeGeneratorConfig()
+    config = ModelConfig()  # CodeGeneratorConfig 대신 ModelConfig 사용
     model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
     
-    test_dir = create_test_directory()
-    
-    json_path = os.path.join(os.path.dirname(__file__), 'test', 'transaction_test.json')
-    print(f"현재 작업 디렉토리: {os.getcwd()}")
-    print(f"프로젝트 루트: {PROJECT_ROOT}")
-    print(f"JSON 파일 경로: {json_path}")
-    
-    data = load_json_data(json_path)
+    # test_dir = create_test_directory()
+    # json_path = os.path.join(os.path.dirname(__file__), 'test', 'transaction_test.json')
+    # data = load_json_data(json_path)
     
     try:
         print("학습된 모델을 로딩하는 중...")
-        tokenizer = T5Tokenizer.from_pretrained("t5-base")
-        model = T5ForConditionalGeneration.from_pretrained("t5-base")
-        model = model.to(config.DEVICE)
-        print(f"학습된 모델 로딩 완료! (Device: {config.DEVICE})")
+        # 토크나이저 먼저 초기화
+        tokenizer = T5Tokenizer.from_pretrained(model_path, legacy=False)
+        tokenizer.add_prefix_space = True
+        
+        # 특수 토큰 추가 - train.py와 동일한 토큰들 사용
+        special_tokens = {
+            'additional_special_tokens': [
+                # 파이썬 기본 문법
+                'def', 'class', 'return', 'import', 'from', 'print',
+                # TransactionFilter 관련
+                'TransactionFilter', 'by_pk', 'by_src_pk', 'by_func_name',
+                'by_timestamp', 'sort', 'get_result',
+                # 구분자
+                '(', ')', '[', ']', '{', '}', '.', ',', ':', '"', "'",
+                # 연산자
+                '=', '==', '>', '<', '>=', '<=',
+                # 자주 사용되는 키워드
+                'data', 'reverse', 'True', 'False', 'None'
+            ]
+        }
+        tokenizer.add_special_tokens(special_tokens)
+        
+        # 모델 로드
+        model = T5ForConditionalGeneration.from_pretrained(model_path)
+        
+        # 임베딩 레이어 리사이징 추가
+        model.resize_token_embeddings(len(tokenizer))
+        
+        model = model.to(DEVICE)  # DEVICE 대신 device 사용 (상단에서 정의된 것)
+        print(f"학습된 모델 로딩 완료! (Device: {DEVICE})")
     except Exception as e:
         print(f"모델 로딩 중 에러 발생: {str(e)}")
         return
 
     model.eval()
-    
+    data = 0
     interactive_session(model, tokenizer, data)
 
 if __name__ == "__main__":

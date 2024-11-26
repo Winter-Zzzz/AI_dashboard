@@ -296,9 +296,24 @@ def train_model():
 
                 def clean_generated_text(text: str) -> str:
                     # 특수 토큰 제거
-                    text = text.replace("<pad>", "").replace("</s>", "")
-                            # 불필요한 공백 제거
+                    special_tokens = ["<pad>", "</s>"]
+                    for token in special_tokens:
+                        text = text.replace(token, "")
+                    
+                    # 불필요한 공백 제거
                     text = " ".join(text.split())
+                    
+                    # 괄호, 점 주변의 공백 제거
+                    text = text.replace(" (", "(")
+                    text = text.replace(" )", ")")
+                    text = text.replace(" .", ".")
+                    text = text.replace(" [", "[")
+                    text = text.replace(" ]", "]")
+                    text = text.replace(" :", ":")
+                    text = text.replace(" ,", ",")
+                    
+                    # 앞뒤 공백 제거
+                    text = text.strip()
                     return text
 
                 generated = clean_generated_text(tokenizer.decode(outputs[0], clean_up_tokenization_spaces=True))

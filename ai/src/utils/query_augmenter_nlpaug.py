@@ -3,6 +3,7 @@ import nlpaug.augmenter.word as naw
 from typing import List, Tuple, Set
 import nltk
 import re
+import random
 
 def download_nltk_data_if_needed():
     nltk_packages = ['wordnet', 'averaged_perceptron_tagger_eng', 'omw-1.4', 'punkt']
@@ -89,6 +90,8 @@ class QueryAugmenterNlpAug:
                                for item in sublist])
         self.number_pattern = re.compile(f'\\b({number_words}|\\d+)\\s+{"|".join(self.template_components["transaction_terms"])}\\b', 
                                        re.IGNORECASE)
+        
+        self.CODE_PREFIX = "print(TransactionFilter(data)"
 
         try:
             # NlpAug 증강기 초기화 - 보수적인 파라미터 설정
@@ -120,7 +123,49 @@ class QueryAugmenterNlpAug:
         except Exception as e:
             logging.error(f"증강기 초기화 중 에러 발생: {str(e)}")
             raise e
+        
+    def _generate_random_hex(self, length: int = 130) -> str:
+        """130자리 랜덤 16진수 문자열 생성"""
+        hex_chars = '01234567889abcdef'
+        return ''.join(random.choice(hex_chars) for _ in range(length))
+    
+    def _replace_hex_values(self, text: str) -> Tuple[str, dict]:
+        """텍스트 내의 130자리 16진수를 새로운 랜덤값으로 대체하고 매핑 정보 반환"""
+        new_text = text
+        hex_mapping = {}  # 원본 hex와 새로운 hex 간의 매핑 저장
+        
+        # from/to 패턴 확인
+        from_match = self.from_pattern.search(text)
+        to_match = self.to_pattern.search(text)
+        
+        # src_pk/pk 패턴 확인
+        src_pk_match = self.src_pk_pattern.search(text) or self.src_pk_pattern2.search(text)
+        pk_match = self.pk_pattern.search(text) or self.pk_pattern2.search(text)
+        
+        # 모든 16진수 값 찾기
+        hex_values = self.hex_pattern.findall(text)
+        
+        for hex_value in hex_values:
+            if hex_value not in hex_mapping:
+                new_hex = self._generate_random_hex()
+                hex_mapping[hex_value] = new_hex
+                new_text = new_text.replace(hex_value, new_hex)
+        
+        # from/to나 src_pk/pk 패턴이 있는 경우 관계 유지를 위한 로깅
+        if (from_match and to_match) or (src_pk_match and pk_match):
+            logging.info(f"Found paired hex values. Mapping: {hex_mapping}")
+        
+        return new_text, hex_mapping
 
+
+    def _clean_output_code(self, code: str) -> str:
+        """모든 종류의 공백 제거"""
+        return ''.join(code.split())
+    
+    def _wrap_value(self, value: str) -> str:
+        """pk, timestamp 값을 작은 따옴표로 감싸는 함수"""
+        return f"('{value}')"
+    
     def _extract_transaction_count(self, text: str) -> int:
         """텍스트에서 트랜잭션 개수 추출"""
         match = self.number_pattern.search(text.lower())
@@ -138,7 +183,7 @@ class QueryAugmenterNlpAug:
         return None
 
     def _analyze_hex_values(self, text: str) -> dict:
-        """모든 패턴에 따라 16진수 값 분석"""
+        """필요한 정보 분석"""
         result = {
             'src_pk': None,
             'pk': None,
@@ -216,8 +261,8 @@ class QueryAugmenterNlpAug:
         keywords = set()
         values = self._analyze_hex_values(text)
         for val in values.values():
-            if val:
-                keywords.add(val)
+            if val is not None:
+                keywords.add(str(val))
         return keywords
 
     def _preserve_keywords(self, text: str, keywords: Set[str]) -> str:
@@ -247,31 +292,32 @@ class QueryAugmenterNlpAug:
         return True
     
     def _generate_filter_code(self, values: dict) -> str:
-        """분석된 값을 기반으로 필터 코드 생성"""
+        """분석된 값을 기반으로 공백없는 필터 코드 생성"""
         filter_parts = []
         
-        # 필터 순서: src_pk -> pk -> timestamp -> get_result
         if values['func_name']:
-            filter_parts.append(f"by_func_name('{values['func_name']}')")
+            filter_parts.append(f"by_func_name{self._wrap_value(values['func_name'])}")
         if values['src_pk']:
-            filter_parts.append(f"by_src_pk('{values['src_pk']}')")
+            filter_parts.append(f"by_src_pk{self._wrap_value(values['src_pk'])}")
         if values['pk']:
-            filter_parts.append(f"by_pk('{values['pk']}')")
+            filter_parts.append(f"by_pk{self._wrap_value(values['pk'])}")
         if values['timestamp']:
-            filter_parts.append(f"by_timestamp('{values['timestamp']}')")
+            filter_parts.append(f"by_timestamp{self._wrap_value(values['timestamp'])}")
             
         if filter_parts:
-            # 필터 체인 생성 후 get_result() 추가
             filter_chain = '.'.join(filter_parts) + '.get_result()'
-            # 트랜잭션 개수가 있으면 슬라이싱 추가
+            
             if values['transaction_count']:
-                return f"print(TransactionFilter(data).{filter_chain}[:{values['transaction_count']}])"
+                code = f"{self.CODE_PREFIX}.{filter_chain}[:{values['transaction_count']}])"
             else:
-                return f"print(TransactionFilter(data).{filter_chain})"
+                code = f"{self.CODE_PREFIX}.{filter_chain})"
+                
+            return self._clean_output_code(code)
+        
         return None
 
     def _create_number_specific_variations(self, text: str) -> List[str]:
-        """템플릿 기반 변형 생성"""
+        """템플릿 기반 변형 생성 - 항상 랜덤 pk 사용하기"""
         variations = set()  # 중복 방지를 위해 set 사용
         count = self._extract_transaction_count(text)
         
@@ -305,12 +351,13 @@ class QueryAugmenterNlpAug:
         
         # PK 값 추가
         final_variations = []
-        values = self._analyze_hex_values(text)
         for variation in variations:
-            if values['pk']:
-                final_variations.append(f"{variation} to {values['pk']}")
-            elif values['src_pk']:
-                final_variations.append(f"{variation} from {values['src_pk']}")
+        # to/from 랜덤 선택하고 랜덤 PK 추가
+            for _ in range(2):  # 각 변형에 대해 to와 from 버전 모두 생성
+                if random.choice(['to', 'from']) == 'to':
+                    final_variations.append(f"{variation} to {self._generate_random_hex()}")
+                else:
+                    final_variations.append(f"{variation} from {self._generate_random_hex()}")
         
         return final_variations
     
@@ -318,30 +365,64 @@ class QueryAugmenterNlpAug:
         augmented_inputs = []
         augmented_outputs = []
         
-        # 원본 데이터 유지
-        augmented_inputs.extend(input_texts)
-        augmented_outputs.extend(output_texts)
+        # 원본 데이터도 새로운 hex 값으로 변경
+        for input_text, output_code in zip(input_texts, output_texts):
+            # 입력 텍스트의 hex 값 분석
+            values = self._analyze_hex_values(input_text)
+            new_values = values.copy()
+            
+            # 새로운 hex 값 생성 및 적용
+            new_input = input_text
+            new_output = output_code
+            
+            if values['src_pk']:
+                new_hex = self._generate_random_hex()
+                new_input = new_input.replace(values['src_pk'], new_hex)
+                new_output = new_output.replace(values['src_pk'], new_hex)
+                new_values['src_pk'] = new_hex
+                
+            if values['pk']:
+                new_hex = self._generate_random_hex()
+                new_input = new_input.replace(values['pk'], new_hex)
+                new_output = new_output.replace(values['pk'], new_hex)
+                new_values['pk'] = new_hex
+            
+            augmented_inputs.append(new_input)
+            augmented_outputs.append(new_output)
         
         for idx, (input_text, output_code) in enumerate(zip(input_texts, output_texts)):
             try:
                 logging.info(f"\n처리 중인 입력 텍스트: {input_text}")
                 
+                # 입력 텍스트의 hex 값 분석
+                values = self._analyze_hex_values(input_text)
+                
                 # 1. 템플릿 기반 변형 생성
                 template_variations = self._create_number_specific_variations(input_text)
                 if template_variations:
-                    augmented_inputs.extend(template_variations)
-                    augmented_outputs.extend([output_code] * len(template_variations))
+                    for template in template_variations:
+                        # 각 템플릿마다 새로운 hex 값 생성
+                        new_values = values.copy()
+                        new_template = template
+                        new_output = output_code
+                        
+                        if values['src_pk']:
+                            new_hex = self._generate_random_hex()
+                            new_template = new_template.replace(values['src_pk'], new_hex)
+                            new_output = new_output.replace(values['src_pk'], new_hex)
+                            new_values['src_pk'] = new_hex
+                            
+                        if values['pk']:
+                            new_hex = self._generate_random_hex()
+                            new_template = new_template.replace(values['pk'], new_hex)
+                            new_output = new_output.replace(values['pk'], new_hex)
+                            new_values['pk'] = new_hex
+                        
+                        augmented_inputs.append(new_template)
+                        augmented_outputs.append(new_output)
                 
-                # 입력 텍스트 분석
-                values = self._analyze_hex_values(input_text)
-                
-                # 필터 코드 생성
-                generated_code = self._generate_filter_code(values)
-                if generated_code:
-                    output_texts[idx] = generated_code
-                
-                # 키워드 추출
-                keywords = self._get_keywords(input_text)
+                # 키워드 추출 (hex 값 제외)
+                keywords = self._get_keywords(input_text) - set(self.hex_pattern.findall(input_text))
                 logging.info(f"보존할 키워드: {keywords}")
                 
                 nlp_variations = set()
@@ -352,11 +433,23 @@ class QueryAugmenterNlpAug:
                     logging.info(f"동의어 교체 결과: {syn_texts}")
                     if isinstance(syn_texts, list):
                         for text in syn_texts:
-                            if isinstance(text, str):
-                                preserved = self._preserve_keywords(text, keywords)
-                            else:
-                                preserved = self._preserve_keywords(text[0], keywords)
-                            nlp_variations.add(preserved)
+                            # 새로운 hex 값 생성 및 적용
+                            new_values = values.copy()
+                            preserved = self._preserve_keywords(text[0] if isinstance(text, list) else text, keywords)
+                            new_text = preserved
+                            new_output = output_code
+                            
+                            if values['src_pk']:
+                                new_hex = self._generate_random_hex()
+                                new_text = new_text.replace(values['src_pk'], new_hex)
+                                new_output = new_output.replace(values['src_pk'], new_hex)
+                                
+                            if values['pk']:
+                                new_hex = self._generate_random_hex()
+                                new_text = new_text.replace(values['pk'], new_hex)
+                                new_output = new_output.replace(values['pk'], new_hex)
+                                
+                            nlp_variations.add((new_text, new_output))
                 except Exception as e:
                     logging.error(f"동의어 교체 중 에러: {str(e)}")
                 
@@ -366,36 +459,59 @@ class QueryAugmenterNlpAug:
                     logging.info(f"단어 삽입 결과: {insert_texts}")
                     if isinstance(insert_texts, list):
                         for text in insert_texts:
-                            if isinstance(text, str):
-                                preserved = self._preserve_keywords(text, keywords)
-                            else:
-                                preserved = self._preserve_keywords(text[0], keywords)
-                            nlp_variations.add(preserved)
+                            # 새로운 hex 값 생성 및 적용
+                            new_values = values.copy()
+                            preserved = self._preserve_keywords(text[0] if isinstance(text, list) else text, keywords)
+                            new_text = preserved
+                            new_output = output_code
+                            
+                            if values['src_pk']:
+                                new_hex = self._generate_random_hex()
+                                new_text = new_text.replace(values['src_pk'], new_hex)
+                                new_output = new_output.replace(values['src_pk'], new_hex)
+                                
+                            if values['pk']:
+                                new_hex = self._generate_random_hex()
+                                new_text = new_text.replace(values['pk'], new_hex)
+                                new_output = new_output.replace(values['pk'], new_hex)
+                                
+                            nlp_variations.add((new_text, new_output))
                 except Exception as e:
                     logging.error(f"단어 삽입 중 에러: {str(e)}")
                 
-                # 4. BERT 기반 대체
+                # 4. BERT 기반 대체 (동일한 패턴 적용)
                 try:
                     context_texts = self.aug_word_embs.augment(input_text, n=num_variations)
                     logging.info(f"BERT 문맥 변경 결과: {context_texts}")
                     if isinstance(context_texts, list):
                         for text in context_texts:
-                            if isinstance(text, str):
-                                preserved = self._preserve_keywords(text, keywords)
-                            else:
-                                preserved = self._preserve_keywords(text[0], keywords)
-                            nlp_variations.add(preserved)
+                            new_values = values.copy()
+                            preserved = self._preserve_keywords(text[0] if isinstance(text, list) else text, keywords)
+                            new_text = preserved
+                            new_output = output_code
+                            
+                            if values['src_pk']:
+                                new_hex = self._generate_random_hex()
+                                new_text = new_text.replace(values['src_pk'], new_hex)
+                                new_output = new_output.replace(values['src_pk'], new_hex)
+                                
+                            if values['pk']:
+                                new_hex = self._generate_random_hex()
+                                new_text = new_text.replace(values['pk'], new_hex)
+                                new_output = new_output.replace(values['pk'], new_hex)
+                                
+                            nlp_variations.add((new_text, new_output))
                 except Exception as e:
                     logging.error(f"BERT 문맥 변경 중 에러: {str(e)}")
                 
                 logging.info(f"생성된 모든 NLP 변형: {nlp_variations}")
                 
                 # NLP 변형 검증 및 필터링
-                for variation in nlp_variations:
+                for variation, var_output in nlp_variations:
                     if (variation != input_text and  # 원본과 동일하지 않고
-                        self._check_valid_variation(variation, output_code)):  # 유효한 변형인 경우
+                        self._check_valid_variation(variation, var_output)):  # 유효한 변형인 경우
                         augmented_inputs.append(variation)
-                        augmented_outputs.append(output_code)
+                        augmented_outputs.append(var_output)
                 
                 if idx % 10 == 0:
                     logging.info(f"Processed {idx+1}/{len(input_texts)} items")
