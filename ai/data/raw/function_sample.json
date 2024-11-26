@@ -43,6 +43,38 @@
         {
             "input": "Show 3 latest transactions from source to destination with on function",
             "output": "print(TransactionFilter(data).by_src_pk('137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54').by_pk('04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d').by_func_name('on').sort(reverse=True).get_result()[:3])"
+        },
+        {
+            "input": "Show first 3 transactions before timestamp 1677800000",
+            "output": "print(TransactionFilter(data).by_timestamp('1677800000').sort().get_result()[:3])"
+        },
+        {
+            "input": "Find 6 earliest transactions to destination address 04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d",
+            "output": "print(TransactionFilter(data).by_pk('04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d').sort().get_result()[:6])"
+        },
+        {
+            "input": "Display 4 oldest transactions from source 137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54",
+            "output": "print(TransactionFilter(data).by_src_pk('137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54').sort().get_result()[:4])"
+        },
+        {
+            "input": "Show 5 earliest setup function calls before timestamp 1677800000",
+            "output": "print(TransactionFilter(data).by_timestamp('1677800000').by_func_name('setup').sort().get_result()[:5])"
+        },
+        {
+            "input": "Find 3 oldest on function calls to destination 04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d",
+            "output": "print(TransactionFilter(data).by_pk('04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d').by_func_name('on').sort().get_result()[:3])"
+        },
+        {
+            "input": "Get 4 oldest setup function calls from source 137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54",
+            "output": "print(TransactionFilter(data).by_src_pk('137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54').by_func_name('setup').sort().get_result()[:4])"
+        },
+        {
+            "input": "Show 2 earliest transactions before 1677800000",
+            "output": "print(TransactionFilter(data).by_timestamp('1677800000').sort().get_result()[:2])"
+        },
+        {
+            "input": "Find 3 oldest off function calls after timestamp 1677800000",
+            "output": "print(TransactionFilter(data).by_timestamp('1677800000').by_func_name('off').sort().get_result()[:3])"
         }
     ]
 }
