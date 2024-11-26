@@ -7,10 +7,10 @@ class ModelConfig:
     MAX_GEN_LENGTH = 512  # 생성되는 코드의 길이도 동일하게 설정
     
     # 학습 하이퍼파라미터
-    BATCH_SIZE = 6  # 긴 시퀀스 길이 고려하여 조정
+    BATCH_SIZE = 4 
     LEARNING_RATE = 2e-4
     WEIGHT_DECAY = 0.05
-    NUM_EPOCHS = 50
+    NUM_EPOCHS = 20
     PATIENCE = 5
     
     # 생성 파라미터

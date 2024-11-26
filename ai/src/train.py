@@ -52,12 +52,10 @@ class QueryDataset(Dataset):
         input_text = self.input_texts[idx]
         output_text = self.output_texts[idx]
 
-        # 파이썬 코드 생성을 위한 프롬프트 형식 지정
-        formatted_input = f"Generate Python: {input_text}"
 
         # 입력 토큰화 시 특수 토큰 처리
         input_encoding = self.tokenizer(
-            formatted_input,
+            input_text,
             max_length=self.max_length,
             padding='max_length',
             truncation=True,
@@ -88,7 +86,6 @@ def train_model():
     """
         T5 모델을 사용하여 파이썬 코드 생성 모델을 학습하는 함수
     """
-
     # 로깅 설정
     log_file = os.path.join('logs', 'training_logs.txt')
     logging.basicConfig(
@@ -124,8 +121,8 @@ def train_model():
         tokenizer.add_prefix_space = True
         model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
 
-        # 파이썬 코드에 특화된 특수 토큰 추가
-        # 토크나이저 초기화 부분에서
+    #     파이썬 코드에 특화된 특수 토큰 추가
+    #     토크나이저 초기화 부분에서
         special_tokens = {
             'additional_special_tokens': [
                 # 핵심 구조 토큰
@@ -145,14 +142,14 @@ def train_model():
                 
                 # 메서드 체이닝
                 '.'
-    ]
-}
+              ]
+      }
 
 
         # 특수 토큰 추가 및 토크나이저 업데이트
         tokenizer.add_special_tokens(special_tokens)
 
-        # 모델의 임베딩 레이어 크기 조절
+        # 모델의 임베딩 레이어 크기 조절 
         model.resize_token_embeddings(len(tokenizer))
 
         model = model.to(device)
@@ -237,7 +234,7 @@ def train_model():
                     break
 
             # 주기적 테스트 생성
-            if (epoch + 1) % 5 == 0:
+            if (epoch + 1) % 3 == 0:
                 model.eval()
                 test_input = input_texts[0]
                 print(f"\nTesting current model:")
@@ -245,7 +242,7 @@ def train_model():
                 
                 # 파이썬 코드 생성을 위한 프롬프트
                 test_inputs = tokenizer(
-                    f"Generate Python: {test_input}",
+                    test_input,
                     return_tensors="pt",
                     max_length=config.MAX_LENGTH,
                     padding=True,
@@ -267,7 +264,7 @@ def train_model():
                         early_stopping=True,
                     )
 
-                generated = tokenizer.decode(outputs[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+                generated = tokenizer.decode(outputs[0], clean_up_tokenization_spaces=True)
                 print(f"Generated: {generated}\n")
                 logging.info(f"Test generation result: {generated}")
 

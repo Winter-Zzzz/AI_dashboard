@@ -4,16 +4,30 @@ from typing import List, Tuple, Set
 import nltk
 import re
 
+def download_nltk_data_if_needed():
+    nltk_packages = ['wordnet', 'averaged_perceptron_tagger_eng', 'omw-1.4', 'punkt']
+    for package in nltk_packages:
+        try:
+            nltk.data.find(f'tokenizers/{package}')
+            logging.info(f"Package {package} already exists. Skipping download.")
+        except LookupError:
+            try:
+                nltk.download(package)
+                logging.info(f"Successfully downloaded {package}")
+            except Exception as e:
+                logging.warning(f"NLTK 데이터 '{package}' 다운로드 중 경고: {str(e)}")
+
+class QueryAugmenterNlpAug:
+    def __init__(self):
+        # NLTK 데이터 다운로드 체크 및 필요시 다운로드
+        download_nltk_data_if_needed()
+
+        # 나머지 코드는 동일...
+
 class QueryAugmenterNlpAug:
     def __init__(self):
         # NLTK 데이터 다운로드
-        try:
-            nltk.download('wordnet')
-            nltk.download('averaged_perceptron_tagger_eng')
-            nltk.download('omw-1.4')
-            nltk.download('punkt')
-        except Exception as e:
-            logging.warning(f"NLTK 데이터 다운로드 중 경고: {str(e)}")
+        download_nltk_data_if_needed()
 
         # 트랜잭션 관련 키워드 정의
         self.preserved_keywords = {
