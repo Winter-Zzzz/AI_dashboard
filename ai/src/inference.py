@@ -41,7 +41,6 @@ def load_json_data(json_path: str) -> dict:
 
 def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer: T5Tokenizer) -> str:
     """코드 생성 함수"""
-    input_text = f"Generate Python: {input_text}"
     inputs = tokenizer(
         input_text, 
         return_tensors="pt", 
@@ -65,9 +64,6 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
     
     outputs = outputs.cpu()
     generated_code = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-    if generated_code.startswith("Generate Python: "):
-        generated_code = generated_code[len("Generate Python: "):]
 
     return generated_code.strip()
 

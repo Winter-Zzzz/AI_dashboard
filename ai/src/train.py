@@ -82,6 +82,8 @@ class QueryDataset(Dataset):
             'labels': labels
         }
 
+    
+
 def train_model():
     """
         T5 모델을 사용하여 파이썬 코드 생성 모델을 학습하는 함수
@@ -121,30 +123,23 @@ def train_model():
         tokenizer.add_prefix_space = True
         model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
 
-    #     파이썬 코드에 특화된 특수 토큰 추가
-    #     토크나이저 초기화 부분에서
+        #     파이썬 코드에 특화된 특수 토큰 추가
+        #     토크나이저 초기화 부분에서
         special_tokens = {
-            'additional_special_tokens': [
-                # 핵심 구조 토큰
-                'print(',
-                'TransactionFilter(data)',
-                '.by_pk',
-                '.by_src_pk',
-                '.by_func_name',
-                '.by_timestamp',
-                '.sort',
-                '.get_result()',
-                'reverse=True',
-                'reverse=False',
-                
-                # 기본 Python 토큰
-                '(', ')', '[', ']', ':', ',', "'",
-                
-                # 메서드 체이닝
-                '.'
-              ]
-      }
-
+        'additional_special_tokens': [
+            # 파이썬 기본 문법
+            'def', 'class', 'return', 'import', 'from', 'print',
+            # TransactionFilter 관련
+            'TransactionFilter', 'by_pk', 'by_src_pk', 'by_func_name',
+            'by_timestamp', 'sort', 'get_result',
+            # 구분자
+            '(', ')', '[', ']', '{', '}', '.', ',', ':', '"', "'",
+            # 연산자
+            '=', '==', '>', '<', '>=', '<=',
+            # 자주 사용되는 키워드
+            'data', 'reverse', 'True', 'False', 'None'
+            ]
+        }
 
         # 특수 토큰 추가 및 토크나이저 업데이트
         tokenizer.add_special_tokens(special_tokens)
@@ -264,8 +259,16 @@ def train_model():
                         early_stopping=True,
                     )
 
-                generated = tokenizer.decode(outputs[0], clean_up_tokenization_spaces=True)
-                print(f"Generated: {generated}\n")
+                def clean_generated_text(text: str) -> str:
+                    # 특수 토큰 제거
+                    text = text.replace("<pad>", "").replace("</s>", "")
+                            # 불필요한 공백 제거
+                    text = " ".join(text.split())
+                    return text
+
+                generated = clean_generated_text(tokenizer.decode(outputs[0], clean_up_tokenization_spaces=True))
+                
+                print(f"Output: {generated}\n")
                 logging.info(f"Test generation result: {generated}")
 
     except Exception as e:

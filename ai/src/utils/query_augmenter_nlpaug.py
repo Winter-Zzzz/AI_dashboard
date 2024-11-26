@@ -73,9 +73,11 @@ class QueryAugmenterNlpAug:
         keywords = set()
         words = text.split()
         
-        # 128자리 16진수 형태의 src_pk, pk 값 보존
+        # 130자리 16진수 형태의 src_pk, pk 값 보존
         for word in words:
-            if len(word) == 128 and all(c in '0123456789abcdefABCDEF' for c in word):
+            if len(word) == 130 and all(c in '0123456789abcdefABCDEF' for c in word):
+                keywords.add(word)
+            elif len(word) == 10 and word.isdigit():
                 keywords.add(word)
                 
         return keywords
@@ -207,12 +209,12 @@ if __name__ == "__main__":
     
     # 테스트 데이터
     test_inputs = [
-        "Show 3 transactions to 04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d",
-        "Find last 5 transactions from 137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54"
+        "Show 3 transactions to 04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d"
     ]
+
     test_outputs = [
         "print(TransactionFilter(data).by_pk('04750bfae2e57e7160cb5ead399ab37afdb4a1451a0b96b08764296dbe8490d946f1312034836474ccf7070b44d3e98f03dca538d148aff42fce155f58243de60d').get_result()[:3])",
-        "print(TransactionFilter(data).by_src_pk('137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54').sort(reverse=True).get_result()[:5])"
+        # "print(TransactionFilter(data).by_src_pk('137e79e9ffe13c164580d4cb388f70f6cee4dcc5eafc0c1ddf0296df00d885e47bbd3a1d22c17c61dc663a05030cd7db0f3f114590da4b0ee2d5679906affa54').sort(reverse=True).get_result()[:5])"
     ]
     
     augmented_inputs, augmented_outputs = augmenter.augment(test_inputs, test_outputs)
