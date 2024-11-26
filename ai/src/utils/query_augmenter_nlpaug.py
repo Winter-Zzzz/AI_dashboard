@@ -28,7 +28,45 @@ class QueryAugmenterNlpAug:
             'show', 'find', 'display', 'get', 'latest', 'recent', 'earliest', 'from', 'to', 'src_pk', 'pk'
         }
 
-         # 모든 패턴 정규식 정의
+        # 숫자 표현 정의
+        self.number_variations = {
+            'cardinal': {
+                1: ['one', 'single', '1'],
+                2: ['two', 'couple', '2'],
+                3: ['three', '3'],
+                4: ['four', '4'],
+                5: ['five', '5'],
+                10: ['ten', '10']
+            },
+            'ordinal': {
+                1: ['first', '1st'],
+                2: ['second', '2nd'],
+                3: ['third', '3rd'],
+                4: ['fourth', '4th'],
+                5: ['fifth', '5th']
+            }
+        }
+
+        # 템플릿 구성요소 정의
+        self.template_components = {
+            'action_verbs': ['show', 'get', 'display', 'find'],
+            'quantity_words': ['last', 'recent', 'latest', 'previous', 'past'],
+            'transaction_terms': ['transactions', 'transaction records', 'transaction history', 'entries']
+        }
+
+        # 쿼리 템플릿 정의
+        self.query_templates = [
+            "{action} {number} {trans}",                          # show three transactions
+            "{action} {quantity} {number} {trans}",              # show last three transactions
+            "{action} me {number} {trans}",                      # show me three transactions
+            "{action} me {quantity} {number} {trans}",           # show me last three transactions
+            "I want to {action} {number} {trans}",               # I want to see three transactions
+            "I need {number} {trans}",                           # I need three transactions
+            "Could you {action} {number} {trans}",               # Could you show three transactions
+            "Please {action} {number} {trans}"                   # Please show three transactions
+        ]
+
+        # 모든 패턴 정규식 정의
         self.hex_pattern = re.compile(r'[0-9a-fA-F]{130}')
         self.timestamp_pattern = re.compile(r'\b\d{10}\b')
         
@@ -44,6 +82,13 @@ class QueryAugmenterNlpAug:
 
         # 함수명 패턴 추가
         self.func_name_pattern = re.compile(r'\b(setup|on|off)\b', re.IGNORECASE)
+
+        # 숫자 패턴 추가
+        number_words = '|'.join(list(self.number_variations['cardinal'].values())[0] + 
+                              [item for sublist in self.number_variations['cardinal'].values() 
+                               for item in sublist])
+        self.number_pattern = re.compile(f'\\b({number_words}|\\d+)\\s+{"|".join(self.template_components["transaction_terms"])}\\b', 
+                                       re.IGNORECASE)
 
         try:
             # NlpAug 증강기 초기화 - 보수적인 파라미터 설정
@@ -76,13 +121,30 @@ class QueryAugmenterNlpAug:
             logging.error(f"증강기 초기화 중 에러 발생: {str(e)}")
             raise e
 
+    def _extract_transaction_count(self, text: str) -> int:
+        """텍스트에서 트랜잭션 개수 추출"""
+        match = self.number_pattern.search(text.lower())
+        if match:
+            number = match.group(1)
+            # 숫자가 문자로 되어있으면 변환
+            for num, variations in self.number_variations['cardinal'].items():
+                if number.lower() in [var.lower() for var in variations]:
+                    return num
+            # 숫자 문자열이면 정수로 변환
+            try:
+                return int(number)
+            except ValueError:
+                pass
+        return None
+
     def _analyze_hex_values(self, text: str) -> dict:
         """모든 패턴에 따라 16진수 값 분석"""
         result = {
             'src_pk': None,
             'pk': None,
             'timestamp': None,
-            'func_name': None 
+            'func_name': None,
+            'transaction_count': self._extract_transaction_count(text)  # 트랜잭션 개수 추가
         }
         
         # 함수명 검사 (setup, on, off)
@@ -95,11 +157,18 @@ class QueryAugmenterNlpAug:
         has_to = 'to' in text.lower()
         has_pk_pattern = 'pk' in text.lower() or 'src_pk' in text.lower()
         
-        # timestamp 확인 (항상 먼저 체크)
+        # timestamp 확인
         timestamp_match = self.timestamp_pattern.search(text)
         if timestamp_match:
             result['timestamp'] = timestamp_match.group(0)
         
+        # get_result 패턴 확인
+        get_result_pattern = re.compile(r"get_result\s*\(\s*'?([0-9a-fA-F]{130})'?\s*\)")
+        get_result_match = get_result_pattern.search(text)
+        if get_result_match:
+            result['pk'] = get_result_match.group(1)
+            return result
+
         # 1. src_pk 직접 패턴 확인
         src_pk_match = self.src_pk_pattern.search(text) or self.src_pk_pattern2.search(text)
         if src_pk_match:
@@ -111,12 +180,11 @@ class QueryAugmenterNlpAug:
             result['pk'] = pk_match.group(1)
         
         # 3. from 패턴 확인
-        if not result['src_pk']:  # src_pk가 아직 설정되지 않은 경우만
+        if not result['src_pk']:
             from_match = self.from_pattern.search(text)
             if from_match:
                 result['src_pk'] = from_match.group(1)
-                # from 이후의 다른 16진수는 to가 없어도 pk로 처리
-                if not result['pk']:  # pk가 아직 설정되지 않은 경우만
+                if not result['pk']:
                     remaining_hex = [h for h in self.hex_pattern.findall(text) 
                                 if h != result['src_pk'] and 
                                 text.index(h) > text.index(from_match.group(1))]
@@ -124,12 +192,11 @@ class QueryAugmenterNlpAug:
                         result['pk'] = remaining_hex[0]
         
         # 4. to 패턴 확인
-        if not result['pk']:  # pk가 아직 설정되지 않은 경우만
+        if not result['pk']:
             to_match = self.to_pattern.search(text)
             if to_match:
                 result['pk'] = to_match.group(1)
-                # to 이전의 다른 16진수는 from이 없어도 src_pk로 처리
-                if not result['src_pk']:  # src_pk가 아직 설정되지 않은 경우만
+                if not result['src_pk']:
                     remaining_hex = [h for h in self.hex_pattern.findall(text) 
                                 if h != result['pk'] and 
                                 text.index(h) < text.index(to_match.group(1))]
@@ -196,12 +263,58 @@ class QueryAugmenterNlpAug:
         if filter_parts:
             # 필터 체인 생성 후 get_result() 추가
             filter_chain = '.'.join(filter_parts) + '.get_result()'
-            return f"print(TransactionFilter(data).{filter_chain})"
+            # 트랜잭션 개수가 있으면 슬라이싱 추가
+            if values['transaction_count']:
+                return f"print(TransactionFilter(data).{filter_chain}[:{values['transaction_count']}])"
+            else:
+                return f"print(TransactionFilter(data).{filter_chain})"
         return None
 
-
+    def _create_number_specific_variations(self, text: str) -> List[str]:
+        """템플릿 기반 변형 생성"""
+        variations = set()  # 중복 방지를 위해 set 사용
+        count = self._extract_transaction_count(text)
+        
+        if count and count in self.number_variations['cardinal']:
+            number_forms = self.number_variations['cardinal'][count]
+            
+            # 각 템플릿에 대해
+            for template in self.query_templates:
+                # 각 구성요소의 가능한 조합을 적용
+                for action in self.template_components['action_verbs']:
+                    for number in number_forms:
+                        for trans in self.template_components['transaction_terms']:
+                            # 기본 템플릿 (quantity가 없는 경우)
+                            if "{quantity}" not in template:
+                                variation = template.format(
+                                    action=action,
+                                    number=number,
+                                    trans=trans
+                                )
+                                variations.add(variation)
+                            # quantity가 있는 템플릿
+                            else:
+                                for quantity in self.template_components['quantity_words']:
+                                    variation = template.format(
+                                        action=action,
+                                        quantity=quantity,
+                                        number=number,
+                                        trans=trans
+                                    )
+                                    variations.add(variation)
+        
+        # PK 값 추가
+        final_variations = []
+        values = self._analyze_hex_values(text)
+        for variation in variations:
+            if values['pk']:
+                final_variations.append(f"{variation} to {values['pk']}")
+            elif values['src_pk']:
+                final_variations.append(f"{variation} from {values['src_pk']}")
+        
+        return final_variations
+    
     def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2) -> Tuple[List[str], List[str]]:
-        """NlpAug 기반 텍스트 증강"""
         augmented_inputs = []
         augmented_outputs = []
         
@@ -212,6 +325,12 @@ class QueryAugmenterNlpAug:
         for idx, (input_text, output_code) in enumerate(zip(input_texts, output_texts)):
             try:
                 logging.info(f"\n처리 중인 입력 텍스트: {input_text}")
+                
+                # 1. 템플릿 기반 변형 생성
+                template_variations = self._create_number_specific_variations(input_text)
+                if template_variations:
+                    augmented_inputs.extend(template_variations)
+                    augmented_outputs.extend([output_code] * len(template_variations))
                 
                 # 입력 텍스트 분석
                 values = self._analyze_hex_values(input_text)
@@ -225,9 +344,9 @@ class QueryAugmenterNlpAug:
                 keywords = self._get_keywords(input_text)
                 logging.info(f"보존할 키워드: {keywords}")
                 
-                variations = set()
+                nlp_variations = set()
                 
-                # 1. 동의어 기반 변형
+                # 2. 동의어 기반 변형
                 try:
                     syn_texts = self.aug_syn.augment(input_text, n=num_variations)
                     logging.info(f"동의어 교체 결과: {syn_texts}")
@@ -237,11 +356,11 @@ class QueryAugmenterNlpAug:
                                 preserved = self._preserve_keywords(text, keywords)
                             else:
                                 preserved = self._preserve_keywords(text[0], keywords)
-                            variations.add(preserved)
+                            nlp_variations.add(preserved)
                 except Exception as e:
                     logging.error(f"동의어 교체 중 에러: {str(e)}")
                 
-                # 2. 문맥 기반 삽입
+                # 3. 문맥 기반 삽입
                 try:
                     insert_texts = self.aug_insert.augment(input_text, n=num_variations)
                     logging.info(f"단어 삽입 결과: {insert_texts}")
@@ -251,11 +370,11 @@ class QueryAugmenterNlpAug:
                                 preserved = self._preserve_keywords(text, keywords)
                             else:
                                 preserved = self._preserve_keywords(text[0], keywords)
-                            variations.add(preserved)
+                            nlp_variations.add(preserved)
                 except Exception as e:
                     logging.error(f"단어 삽입 중 에러: {str(e)}")
                 
-                # 3. BERT 기반 대체
+                # 4. BERT 기반 대체
                 try:
                     context_texts = self.aug_word_embs.augment(input_text, n=num_variations)
                     logging.info(f"BERT 문맥 변경 결과: {context_texts}")
@@ -265,28 +384,22 @@ class QueryAugmenterNlpAug:
                                 preserved = self._preserve_keywords(text, keywords)
                             else:
                                 preserved = self._preserve_keywords(text[0], keywords)
-                            variations.add(preserved)
+                            nlp_variations.add(preserved)
                 except Exception as e:
                     logging.error(f"BERT 문맥 변경 중 에러: {str(e)}")
                 
-                logging.info(f"생성된 모든 변형: {variations}")
+                logging.info(f"생성된 모든 NLP 변형: {nlp_variations}")
                 
-                # 변형 검증 및 필터링
-                valid_variations = set()
-                for variation in variations:
+                # NLP 변형 검증 및 필터링
+                for variation in nlp_variations:
                     if (variation != input_text and  # 원본과 동일하지 않고
                         self._check_valid_variation(variation, output_code)):  # 유효한 변형인 경우
-                        valid_variations.add(variation)
-                
-                logging.info(f"유효한 변형 수: {len(valid_variations)}")
-                if valid_variations:
-                    logging.info(f"유효한 변형들: {valid_variations}")
-                    augmented_inputs.extend(valid_variations)
-                    augmented_outputs.extend([output_code] * len(valid_variations))
+                        augmented_inputs.append(variation)
+                        augmented_outputs.append(output_code)
                 
                 if idx % 10 == 0:
                     logging.info(f"Processed {idx+1}/{len(input_texts)} items")
-                    logging.info(f"Current variations for item {idx}: {len(variations)}")
+                    logging.info(f"Current variations for item {idx}: {len(nlp_variations)}")
                 
             except Exception as e:
                 logging.error(f"증강 중 에러 발생 (idx={idx}): {str(e)}")

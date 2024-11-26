@@ -215,11 +215,46 @@ def train_model():
             if avg_loss < best_loss:
                 best_loss = avg_loss
                 no_improve = 0
-                save_path = 'models/best_model'
-                os.makedirs(save_path, exist_ok=True)
-                model.save_pretrained(save_path)
-                tokenizer.save_pretrained(save_path)
-                logging.info(f"Best model saved (loss: {best_loss:.4f})")
+                # 절대 경로로 변경
+                save_path = os.path.join(project_root, 'models', 'best_model')
+                
+                try:
+                    # 임시 저장 경로 생성
+                    temp_path = os.path.join(project_root, 'models', 'temp_model')
+                    os.makedirs(temp_path, exist_ok=True)
+                    
+                    # 임시 경로에 먼저 저장
+                    model.save_pretrained(temp_path)
+                    tokenizer.save_pretrained(temp_path)
+                    
+                    # 기존 모델 백업
+                    if os.path.exists(save_path):
+                        backup_path = f"{save_path}_backup"
+                        if os.path.exists(backup_path):
+                            shutil.rmtree(backup_path)
+                        shutil.copytree(save_path, backup_path)
+                    
+                    # 임시 저장된 모델을 실제 위치로 이동
+                    if os.path.exists(save_path):
+                        shutil.rmtree(save_path)
+                    shutil.copytree(temp_path, save_path)
+                    
+                    # 임시 디렉토리 삭제
+                    shutil.rmtree(temp_path)
+                    
+                    # 저장 성공 로그
+                    print(f"Model saved successfully to: {save_path}")
+                    print(f"Saved files:", os.listdir(save_path))
+                    logging.info(f"Best model saved (loss: {best_loss:.4f}) to {save_path}")
+                    
+                except Exception as e:
+                    print(f"Error saving model: {str(e)}")
+                    logging.error(f"Error saving model: {str(e)}")
+                    # 저장 실패시 백업에서 복구
+                    if os.path.exists(f"{save_path}_backup"):
+                        shutil.rmtree(save_path)
+                        shutil.copytree(f"{save_path}_backup", save_path)
+    
             else:
                 no_improve += 1
                 if no_improve >= config.PATIENCE:

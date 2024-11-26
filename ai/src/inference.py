@@ -4,6 +4,8 @@ import json
 import torch
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 from utils.filter_data import TransactionFilter
+from pathlib import Path
+from config.model_config import ModelConfig
 
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -13,12 +15,21 @@ sys.path.append(PROJECT_ROOT)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {DEVICE}")
 
-try:
-    from config.model_config import ModelConfig
-except ImportError:
-    class ModelConfig:
-        def __init__(self):
-            self.MODEL_NAME = "t5-base"
+class CodeGeneratorConfig:
+    def __init__(self):
+        self.BASE_MODEL_NAME = ModelConfig.MODEL_NAME  # 't5-base'
+        self.MODEL_NAME = ModelConfig.MODEL_NAME  # 't5-base'
+        self.MODEL_PATH = Path("models/best_model")  # best_model 경로 설정
+        self.DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # 모델 입력 및 출력 길이 설정
+        self.MAX_INPUT_LENGTH = ModelConfig.MAX_LENGTH
+        self.MAX_OUTPUT_LENGTH = ModelConfig.MAX_GEN_LENGTH
+        
+        # 생성 파라미터 설정
+        self.NUM_BEAMS = ModelConfig.NUM_BEAMS
+        self.TEMPERATURE = ModelConfig.TEMPERATURE
+        self.TOP_P = ModelConfig.TOP_P
 
 def create_test_directory():
     """테스트 디렉토리 생성"""
@@ -112,7 +123,7 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
 
 def main():
     """메인 함수"""
-    config = ModelConfig()
+    config = CodeGeneratorConfig()
     model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
     
     test_dir = create_test_directory()
@@ -128,8 +139,8 @@ def main():
         print("학습된 모델을 로딩하는 중...")
         tokenizer = T5Tokenizer.from_pretrained("t5-base")
         model = T5ForConditionalGeneration.from_pretrained("t5-base")
-        model = model.to(DEVICE)
-        print(f"학습된 모델 로딩 완료! (Device: {DEVICE})")
+        model = model.to(config.DEVICE)
+        print(f"학습된 모델 로딩 완료! (Device: {config.DEVICE})")
     except Exception as e:
         print(f"모델 로딩 중 에러 발생: {str(e)}")
         return
