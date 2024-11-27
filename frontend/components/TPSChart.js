@@ -1,9 +1,27 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { LineChart } from '@mui/x-charts/LineChart';
-import { dataset } from '../dataset/TPS';
 import { CHART_DIMENSIONS } from './chartDimensions';
 
-export default function TPSChart() {  
+export default function TPSChart({ data }) {  
+  const { dataset, maxTPS } = useMemo(() => {
+    if(!data?.tpsData) {
+      return { dataset: [], maxTPS: 400 };
+    }
+
+    const formattedData = data.tpsData.map(item => ({
+      date: new Date(item.timestamp),
+      tps: item.tps
+    }));
+
+    const currentMax = Math.max(...formattedData.map(item => item.tps));
+    const calculatedMaxTPS = Math.ceil(currentMax / 100) * 100;
+
+    return{
+      dataset: formattedData,
+      maxTPS: calculatedMaxTPS
+    };
+  }, [data]);
+
   return (
     <div className="w-full" style={{ minWidth: CHART_DIMENSIONS.width }}> 
       <LineChart
@@ -14,8 +32,10 @@ export default function TPSChart() {
           dataKey: 'date',
           scaleType: 'time',
           valueFormatter: (date) => {
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
             const hours = String(date.getHours()).padStart(2, '0');
-            return `${hours}:00:00`;
+            return `${month}/${day} ${hours}:00`;
           },
           tickNumber: 7
         }]}
@@ -24,7 +44,7 @@ export default function TPSChart() {
           scaleType: 'linear',
           valueFormatter: (value) => value.toFixed(0),
           min: 0,
-          max: 400
+          max: maxTPS
         }]}
         series={[
           {
@@ -49,11 +69,11 @@ export default function TPSChart() {
         height={CHART_DIMENSIONS.height}
         sx={{
           '.MuiChartsLegend-label': {
-            fontsize: '0.8rem',
+            fontSize: '0.8rem',
           },
           '.MuiChartsLegend-root': {
             transform: 'scale(0.85)',
-            tranformOrigin: 'center',
+            transformOrigin: 'center',
           },
           '& .MuiChartsAxis-label': {
             fontSize: '0.8rem',
