@@ -1,0 +1,202 @@
+[
+    {
+        "input": "Display 2 oldest from 622d318920bd4cd5cf10243046b3db4f9f7fb3b4897b1493a93355eaa0b90bc5fd0ce99ed91476d660891a359e1be086e1af75e7ed50bee345ffb81465bdb1c919 on transactions",
+        "output": "print(TransactionFilter(data).by_src_pk('622d318920bd4cd5cf10243046b3db4f9f7fb3b4897b1493a93355eaa0b90bc5fd0ce99ed91476d660891a359e1be086e1af75e7ed50bee345ffb81465bdb1c919').by_func_name('on').sort().get_result())"
+    },
+    {
+        "input": "Display 2 most recent setup transactions before 1672847485",
+        "output": "print(TransactionFilter(data).by_func_name('setup').by_timestamp('1672847485').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Find 8 earliest to fa4a9715dfcf6b79c6cd92cd0d9bba6153a949db4d97b8017c45eb6c800ef3c55123d90a8d9d530202134c5ff098e31e58d25dc5c4cbccc23c629cbbc05c973ae5 from 7b95102a8c5fb53207c54845d8e7d4fd971b4ddfbe4e93e86bed21eb24a35ce4cd1ba5ca2c4a8e535361a15a3dbce9b1750d4a09269ce225416ce1885a50ca3bb3 before 1619514296",
+        "output": "print(TransactionFilter(data).by_pk('fa4a9715dfcf6b79c6cd92cd0d9bba6153a949db4d97b8017c45eb6c800ef3c55123d90a8d9d530202134c5ff098e31e58d25dc5c4cbccc23c629cbbc05c973ae5').by_src_pk('7b95102a8c5fb53207c54845d8e7d4fd971b4ddfbe4e93e86bed21eb24a35ce4cd1ba5ca2c4a8e535361a15a3dbce9b1750d4a09269ce225416ce1885a50ca3bb3').by_timestamp('1619514296').sort().get_result())"
+    },
+    {
+        "input": "Show 4 earliest before 1621709814",
+        "output": "print(TransactionFilter(data).by_timestamp('1621709814').sort().get_result())"
+    },
+    {
+        "input": "Get 6 most recent from 74b98701eaaf4a14a29ab2c91116922a5f51af734cf182d98b3a3a56a3ff1703a2f7bd49ca1d5f0d8f4d176e24c64b0a24da62e6119f40085ee52a3caf2b8e2210 setup transactions after 1611201134",
+        "output": "print(TransactionFilter(data).by_src_pk('74b98701eaaf4a14a29ab2c91116922a5f51af734cf182d98b3a3a56a3ff1703a2f7bd49ca1d5f0d8f4d176e24c64b0a24da62e6119f40085ee52a3caf2b8e2210').by_func_name('setup').by_timestamp('1611201134').sort(reverse=True).get_result()[:6])"
+    },
+    {
+        "input": "Find 9 oldest from 668b187d22332864810a2c574b4af0485ae0479f97c4e242c96f0045e80440ee05c89ad1cec3bc4d895b44e513a24e7f998bdc21df8bb123fed68b578399736109",
+        "output": "print(TransactionFilter(data).by_src_pk('668b187d22332864810a2c574b4af0485ae0479f97c4e242c96f0045e80440ee05c89ad1cec3bc4d895b44e513a24e7f998bdc21df8bb123fed68b578399736109').sort().get_result()[:9])"
+    },
+    {
+        "input": "Find 2 latest after 1670586989",
+        "output": "print(TransactionFilter(data).by_timestamp('1670586989').sort(reverse=True).get_result()[:2])"
+    },
+    {
+        "input": "Get 6 most recent before 1671168674",
+        "output": "print(TransactionFilter(data).by_timestamp('1671168674').sort(reverse=True).get_result()[:6])"
+    },
+    {
+        "input": "Display 10 oldest from e9a6c410f1969c4208157b6f0980f00b10a156d7b2be6a76340d41ed765de773fac9818b15976df1cc144ecde2c729d5a5aa177e76dbb3f72461d20e6b5e9d5335",
+        "output": "print(TransactionFilter(data).by_src_pk('e9a6c410f1969c4208157b6f0980f00b10a156d7b2be6a76340d41ed765de773fac9818b15976df1cc144ecde2c729d5a5aa177e76dbb3f72461d20e6b5e9d5335').sort().get_result())"
+    },
+    {
+        "input": "Show 8 latest from d012752ad963e9759792f939277ea8994f3158b3fdf65aa792ae941fa3d20eb26f0b3b9510bf1b84054114c67b2a8d213edf786276afa7dbb29c28f98791eb6696 on transactions before 1623227349",
+        "output": "print(TransactionFilter(data).by_src_pk('d012752ad963e9759792f939277ea8994f3158b3fdf65aa792ae941fa3d20eb26f0b3b9510bf1b84054114c67b2a8d213edf786276afa7dbb29c28f98791eb6696').by_func_name('on').by_timestamp('1623227349').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Display 3 earliest setup transactions after 1622710799",
+        "output": "print(TransactionFilter(data).by_func_name('setup').by_timestamp('1622710799').sort().get_result())"
+    },
+    {
+        "input": "Find 7 most recent on transactions",
+        "output": "print(TransactionFilter(data).by_func_name('on').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Get 8 latest to a507bddac9a36f34eb8008b56d716df861838aa5997b67aa950e30bb21dae617e4d206539cef8bd02ef5304fc7e938f60b955052f1d6336b77cb3c09db584c6824 from 6dd242d517426c2dfa599b1973a777348a053a946d1d4c8274d1ceeb2bc147f7b4b3845b08bbecc3a9e98ccfbca5712c4fa5176808725763f3ae5279ddd18158e6 off transactions",
+        "output": "print(TransactionFilter(data).by_pk('a507bddac9a36f34eb8008b56d716df861838aa5997b67aa950e30bb21dae617e4d206539cef8bd02ef5304fc7e938f60b955052f1d6336b77cb3c09db584c6824').by_src_pk('6dd242d517426c2dfa599b1973a777348a053a946d1d4c8274d1ceeb2bc147f7b4b3845b08bbecc3a9e98ccfbca5712c4fa5176808725763f3ae5279ddd18158e6').by_func_name('on').sort(reverse=True).get_result()[:8])"
+    },
+    {
+        "input": "Get 8 most recent from ceddaa4bd09b98b0f7eb795a771cf37e34b27faefbafcecf1b82a54727674f1bfd6984e70ed8828efc720062dd624cc2f6890642a855a219ce6e03a6bbfc170a85 off function calls",
+        "output": "print(TransactionFilter(data).by_src_pk('ceddaa4bd09b98b0f7eb795a771cf37e34b27faefbafcecf1b82a54727674f1bfd6984e70ed8828efc720062dd624cc2f6890642a855a219ce6e03a6bbfc170a85').by_func_name('on').sort(reverse=True).get_result()[:8])"
+    },
+    {
+        "input": "Get 3 oldest to 33afabd43b6294794f6cff9b2da35192eb56d45334077bf1a9589706490b2229b5c46575e06efb3c9418d9812decef0bd31929c298ed90bef294a60378fe3ece02 off transactions before 1634442375",
+        "output": "print(TransactionFilter(data).by_pk('33afabd43b6294794f6cff9b2da35192eb56d45334077bf1a9589706490b2229b5c46575e06efb3c9418d9812decef0bd31929c298ed90bef294a60378fe3ece02').by_func_name('on').by_timestamp('1634442375').sort().get_result())"
+    },
+    {
+        "input": "Show 3 latest from 36bc977a5953054329843288c9a503cd3be736b3b3618221a759376563c41e28e9afab546f7e821aa077995d68ec461593faa6f5acd6d6d0c3348d308ab9bcaea6 after 1695270423",
+        "output": "print(TransactionFilter(data).by_src_pk('36bc977a5953054329843288c9a503cd3be736b3b3618221a759376563c41e28e9afab546f7e821aa077995d68ec461593faa6f5acd6d6d0c3348d308ab9bcaea6').by_timestamp('1695270423').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Display 2 most recent off function calls",
+        "output": "print(TransactionFilter(data).by_func_name('on').sort(reverse=True).get_result()[:2])"
+    },
+    {
+        "input": "Display 3 earliest to 5405d2c4c390c20beb656e9ff385e8060f54a3b7fb132f3a9abd08f8d6883f484172714a7616265d28c8d695023f6251ca67491029a0ddb95593f1970d74c44b07 from a019d992940cb0021fe67549a927beb702869055c11c434363e03ab83f4cf4829668c2001ac732fff31dc53ed2f46b1833d0eab9162a83f43f3ab400fcb0627c50 on transactions",
+        "output": "print(TransactionFilter(data).by_pk('5405d2c4c390c20beb656e9ff385e8060f54a3b7fb132f3a9abd08f8d6883f484172714a7616265d28c8d695023f6251ca67491029a0ddb95593f1970d74c44b07').by_src_pk('a019d992940cb0021fe67549a927beb702869055c11c434363e03ab83f4cf4829668c2001ac732fff31dc53ed2f46b1833d0eab9162a83f43f3ab400fcb0627c50').by_func_name('on').sort().get_result()[:3])"
+    },
+    {
+        "input": "Get 5 earliest setup function calls",
+        "output": "print(TransactionFilter(data).by_func_name('setup').sort().get_result()[:5])"
+    },
+    {
+        "input": "Get 6 most recent to edababe0d0f3d1963a24f0cddd5218fe7e4bc953f5a73225f9d4e304e31641f04e6984759c77e6c5190f3084829c52e03b1cc7b595eb04065a64c4e64ee3085476 from c3a468af551acfc836329456cd7ab825205b610181e30f79106cd518ba3bce0416f311f95fd291e3986af3e62d31e12dc2f6367d7651b92b06b1b3d207e78f820d on transactions",
+        "output": "print(TransactionFilter(data).by_pk('edababe0d0f3d1963a24f0cddd5218fe7e4bc953f5a73225f9d4e304e31641f04e6984759c77e6c5190f3084829c52e03b1cc7b595eb04065a64c4e64ee3085476').by_src_pk('c3a468af551acfc836329456cd7ab825205b610181e30f79106cd518ba3bce0416f311f95fd291e3986af3e62d31e12dc2f6367d7651b92b06b1b3d207e78f820d').by_func_name('on').sort(reverse=True).get_result()[:6])"
+    },
+    {
+        "input": "Find 9 latest to d8be495b7009363c1197201050ec38a3581476c4aa6a2560427dd6ee7692d8e3428790ab07fdb895281053c769ce9b09142b6c2e5a736d58e67823e5d77a316ecf off transactions",
+        "output": "print(TransactionFilter(data).by_pk('d8be495b7009363c1197201050ec38a3581476c4aa6a2560427dd6ee7692d8e3428790ab07fdb895281053c769ce9b09142b6c2e5a736d58e67823e5d77a316ecf').by_func_name('on').sort(reverse=True).get_result()[:9])"
+    },
+    {
+        "input": "Find 3 earliest from 41d8f0a687bd6abeeae7b2ced03ba4b3b0afee5d6bacdf1efe1e2395a56546c2d8ed85607fe5dfb7b469f2e7e120b6f12bc76d2ee66db1a9156ce267de557952c7",
+        "output": "print(TransactionFilter(data).by_src_pk('41d8f0a687bd6abeeae7b2ced03ba4b3b0afee5d6bacdf1efe1e2395a56546c2d8ed85607fe5dfb7b469f2e7e120b6f12bc76d2ee66db1a9156ce267de557952c7').sort().get_result())"
+    },
+    {
+        "input": "Show 4 oldest from cb45fc9915951cc554e5669aa5c19e63171934ec1680337349de71fb7b25d4eac5edfc1f25e7079a560d068cc04ebd431ff75d61a95134316f500a5cbfee92ada2 before 1633573431",
+        "output": "print(TransactionFilter(data).by_src_pk('cb45fc9915951cc554e5669aa5c19e63171934ec1680337349de71fb7b25d4eac5edfc1f25e7079a560d068cc04ebd431ff75d61a95134316f500a5cbfee92ada2').by_timestamp('1633573431').sort().get_result())"
+    },
+    {
+        "input": "Show 5 latest from 34508e9c62de97fd02605f9afa4fe5ef895f0de9adb1f244528d757c35d27193f0a899075f5feeb86610eb601f8c2acd5c565ac830ea6cb34aecb7e1b91d042fc3 setup transactions",
+        "output": "print(TransactionFilter(data).by_src_pk('34508e9c62de97fd02605f9afa4fe5ef895f0de9adb1f244528d757c35d27193f0a899075f5feeb86610eb601f8c2acd5c565ac830ea6cb34aecb7e1b91d042fc3').by_func_name('setup').sort(reverse=True).get_result()[:5])"
+    },
+    {
+        "input": "Get 6 most recent to 0c3094469f2dbcc764a0b87b0c68ef06c45b3664e796e9dbf4eb9b2780e162e70c7c6bba1d65e83c4de47c161bf8e8ff98c5f3ea195115b1552f3bbb130e109902 before 1602034021",
+        "output": "print(TransactionFilter(data).by_pk('0c3094469f2dbcc764a0b87b0c68ef06c45b3664e796e9dbf4eb9b2780e162e70c7c6bba1d65e83c4de47c161bf8e8ff98c5f3ea195115b1552f3bbb130e109902').by_timestamp('1602034021').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Show 8 latest to 60078e3e3fc64474ffd6b4e5c0a739e4843057bcc101ef370a10be53f970912e96ece4fffc44418ac75a5c808264787228284aee43a9e078ee80c038cbef793f82 before 1617568331",
+        "output": "print(TransactionFilter(data).by_pk('60078e3e3fc64474ffd6b4e5c0a739e4843057bcc101ef370a10be53f970912e96ece4fffc44418ac75a5c808264787228284aee43a9e078ee80c038cbef793f82').by_timestamp('1617568331').sort(reverse=True).get_result()[:8])"
+    },
+    {
+        "input": "Show 2 most recent to e5187bd745863464f4415ddfb7edbdad362f097c5f18c764bf9366d0981be0a21adac3e274c5b8ed47219ceb5c04c343d5624891ecba877003472cc873a3a9a765 from 5cbb8daee7f3ec5687766e144fc981b641e63686e3d6ff784e56938398c7e90017775f0877240780923b50acc1f4578218cca0873ae3c3bb57e555c2b68cc09720",
+        "output": "print(TransactionFilter(data).by_pk('e5187bd745863464f4415ddfb7edbdad362f097c5f18c764bf9366d0981be0a21adac3e274c5b8ed47219ceb5c04c343d5624891ecba877003472cc873a3a9a765').by_src_pk('5cbb8daee7f3ec5687766e144fc981b641e63686e3d6ff784e56938398c7e90017775f0877240780923b50acc1f4578218cca0873ae3c3bb57e555c2b68cc09720').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Get 5 latest after 1629685669",
+        "output": "print(TransactionFilter(data).by_timestamp('1629685669').sort(reverse=True).get_result()[:5])"
+    },
+    {
+        "input": "Display 6 most recent to d5cc9c7ec2a0a79897d39b3749c77ceb0c0fe886fe94911b9ffc193db8aeadf20987472c400e5d9a61470c02554499f2e76cdfce80c034eac8586a0cafa77a004d from 3b02798811b6df70741360de78995a44f05ecd5ce336dafa3506b07c833b3ba5c22a0006fe104b0e591637c44e704453247cc24d3b9994d6891d7a7f9aae576a6e before 1607049933",
+        "output": "print(TransactionFilter(data).by_pk('d5cc9c7ec2a0a79897d39b3749c77ceb0c0fe886fe94911b9ffc193db8aeadf20987472c400e5d9a61470c02554499f2e76cdfce80c034eac8586a0cafa77a004d').by_src_pk('3b02798811b6df70741360de78995a44f05ecd5ce336dafa3506b07c833b3ba5c22a0006fe104b0e591637c44e704453247cc24d3b9994d6891d7a7f9aae576a6e').by_timestamp('1607049933').sort(reverse=True).get_result()[:6])"
+    },
+    {
+        "input": "Find 9 oldest before 1685914994",
+        "output": "print(TransactionFilter(data).by_timestamp('1685914994').sort().get_result())"
+    },
+    {
+        "input": "Display 7 earliest after 1638357492",
+        "output": "print(TransactionFilter(data).by_timestamp('1638357492').sort().get_result()[:7])"
+    },
+    {
+        "input": "Display 4 earliest to 448dd0ef1802d8b075580bd826a845f4ea3306d2f457015bbc9267fd00a282550983c5d96dcbe7bb86499d29a17cd39b831e8d60bcfee5aa9f269e0e6004d5b61e",
+        "output": "print(TransactionFilter(data).by_pk('448dd0ef1802d8b075580bd826a845f4ea3306d2f457015bbc9267fd00a282550983c5d96dcbe7bb86499d29a17cd39b831e8d60bcfee5aa9f269e0e6004d5b61e').sort().get_result()[:4])"
+    },
+    {
+        "input": "Display 10 most recent to 9f563af7f3bcbb68d0db356d93eabaa74761e7ef04bf10ccb9b6e82938774b9594b401e23cf042ce7c027b5933d5fe3aec95ac8b9d82936d9d2f0274c6e2999d75 from dee977c33848a3c5c38f7e273b57d6b02faf072711d9848926423db43d2f2e5283d06112e8a9ae56c70aafb72eba4520f656ab9c0d89a5350d278efc5d36351a5b setup function calls after 1682282877",
+        "output": "print(TransactionFilter(data).by_pk('9f563af7f3bcbb68d0db356d93eabaa74761e7ef04bf10ccb9b6e82938774b9594b401e23cf042ce7c027b5933d5fe3aec95ac8b9d82936d9d2f0274c6e2999d75').by_src_pk('dee977c33848a3c5c38f7e273b57d6b02faf072711d9848926423db43d2f2e5283d06112e8a9ae56c70aafb72eba4520f656ab9c0d89a5350d278efc5d36351a5b').by_func_name('setup').by_timestamp('1682282877').sort(reverse=True).get_result()[:10])"
+    },
+    {
+        "input": "Display 2 earliest to 46ef54e4d2a891a64b4f28a2ea7eeda44fdbbd06fd76e22080f18ae06c43dec8fc668a82324b16d527d337565e15f52afc42986464ebd3d63483642ad8b982eddc from 6ae5fe7bfa135561a9c81d0846b88309e2b31ea3c8d9a7c46f0a3f44a1bd2e077548ef81493d4dd3132e259afa4b83c625c827eee420f1f72c570ce9d9422bade4 setup function calls before 1658072045",
+        "output": "print(TransactionFilter(data).by_pk('46ef54e4d2a891a64b4f28a2ea7eeda44fdbbd06fd76e22080f18ae06c43dec8fc668a82324b16d527d337565e15f52afc42986464ebd3d63483642ad8b982eddc').by_src_pk('6ae5fe7bfa135561a9c81d0846b88309e2b31ea3c8d9a7c46f0a3f44a1bd2e077548ef81493d4dd3132e259afa4b83c625c827eee420f1f72c570ce9d9422bade4').by_func_name('setup').by_timestamp('1658072045').sort().get_result())"
+    },
+    {
+        "input": "Get 8 earliest to a5d0da53dd083ca0c50fd5ebaba25413f6fb491807718e03c7ff8ee6b8affef9ffa625a6eabb2d4b3f7376b3b663a7b8fa9adcfec76e9fcd289282c5f4106bfe48 from f2285e46d205484bd93bb92448f45b68074c12bd307e276a5b5f8fe6440f3c9003d393da593c8d26d5b889ca2f4b9a48521effebda3de70236e4c3e41adb9352bf",
+        "output": "print(TransactionFilter(data).by_pk('a5d0da53dd083ca0c50fd5ebaba25413f6fb491807718e03c7ff8ee6b8affef9ffa625a6eabb2d4b3f7376b3b663a7b8fa9adcfec76e9fcd289282c5f4106bfe48').by_src_pk('f2285e46d205484bd93bb92448f45b68074c12bd307e276a5b5f8fe6440f3c9003d393da593c8d26d5b889ca2f4b9a48521effebda3de70236e4c3e41adb9352bf').sort().get_result()[:8])"
+    },
+    {
+        "input": "Get 7 earliest to 969490d7a10fe170a0851749c4745f7d2597f933bd040aff5265eb77600dfa64b14d3d074c3663006eedf40327e5d0750d838140680ed28f5f8b2c0b79e59e5be6 from 58354d49d643b75f97d756f251c7545e8649571d5752239c05e383f2e5c00bc940214281c72a67f37df0a9b51ef08ea774b583308700af1484af06d93b50c55145",
+        "output": "print(TransactionFilter(data).by_pk('969490d7a10fe170a0851749c4745f7d2597f933bd040aff5265eb77600dfa64b14d3d074c3663006eedf40327e5d0750d838140680ed28f5f8b2c0b79e59e5be6').by_src_pk('58354d49d643b75f97d756f251c7545e8649571d5752239c05e383f2e5c00bc940214281c72a67f37df0a9b51ef08ea774b583308700af1484af06d93b50c55145').sort().get_result()[:7])"
+    },
+    {
+        "input": "Display 7 latest from caae53cd61111e8c39773f9037dd59ba4a8fb1acb3ec2b9eb662c4e8b624b41bfa246b6d1f6d1564a444ef17af4895186f8a1ef1050d5b7a3a9d34bad81b0c880d",
+        "output": "print(TransactionFilter(data).by_src_pk('caae53cd61111e8c39773f9037dd59ba4a8fb1acb3ec2b9eb662c4e8b624b41bfa246b6d1f6d1564a444ef17af4895186f8a1ef1050d5b7a3a9d34bad81b0c880d').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Get 4 latest before 1645310187",
+        "output": "print(TransactionFilter(data).by_timestamp('1645310187').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Display 9 oldest on function calls after 1666924268",
+        "output": "print(TransactionFilter(data).by_func_name('on').by_timestamp('1666924268').sort().get_result())"
+    },
+    {
+        "input": "Display 9 latest to b10641fe1090d057f95e6a7d51867d6dde8096a4ec6ffe0a688d3a249849e75389b1764f86433be9a2cb2fbfd8d59471cc4d1be98ac8458e13aec061b1c8c13ec5 from fc32d36d68f609d46d72960c49fd42f1376d8d260581436180346cd1d1e5ea9da86426df9fc4ec2a88ea8b677b81b25d0fd8ae456bf8b2761c8258ccded82aafa9 on transactions",
+        "output": "print(TransactionFilter(data).by_pk('b10641fe1090d057f95e6a7d51867d6dde8096a4ec6ffe0a688d3a249849e75389b1764f86433be9a2cb2fbfd8d59471cc4d1be98ac8458e13aec061b1c8c13ec5').by_src_pk('fc32d36d68f609d46d72960c49fd42f1376d8d260581436180346cd1d1e5ea9da86426df9fc4ec2a88ea8b677b81b25d0fd8ae456bf8b2761c8258ccded82aafa9').by_func_name('on').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Find 2 earliest to f1d5dc38e71eb70a39141efec01042053f4a58f6dae36d2b68be42b0bb34e01e69c7d9fa63b8f0f12e4374dc23654cfff83c2eb6d2ccd93f8776b97fc435e6cd17",
+        "output": "print(TransactionFilter(data).by_pk('f1d5dc38e71eb70a39141efec01042053f4a58f6dae36d2b68be42b0bb34e01e69c7d9fa63b8f0f12e4374dc23654cfff83c2eb6d2ccd93f8776b97fc435e6cd17').sort().get_result())"
+    },
+    {
+        "input": "Find 1 most recent to f39e2c12d8629fdca76c43db578aa5ce0f04876df941ca880423f2dbb6c74d7110e297f2cfba51be16a9bb9fd02a66a1955358cf4bce4d56a56af7b8baa2254e1e from b1fbd257b707601d07d957d4734aa4d9e83110fcc04f0b5741ce383a7a3a54ef809b695b551985b3507360ef3ec6482bd12d4d68091ed71f663fcf06964f7f6a63 setup transactions",
+        "output": "print(TransactionFilter(data).by_pk('f39e2c12d8629fdca76c43db578aa5ce0f04876df941ca880423f2dbb6c74d7110e297f2cfba51be16a9bb9fd02a66a1955358cf4bce4d56a56af7b8baa2254e1e').by_src_pk('b1fbd257b707601d07d957d4734aa4d9e83110fcc04f0b5741ce383a7a3a54ef809b695b551985b3507360ef3ec6482bd12d4d68091ed71f663fcf06964f7f6a63').by_func_name('setup').sort(reverse=True).get_result())"
+    },
+    {
+        "input": "Show 6 latest on function calls before 1667607523",
+        "output": "print(TransactionFilter(data).by_func_name('on').by_timestamp('1667607523').sort(reverse=True).get_result()[:6])"
+    },
+    {
+        "input": "Show 2 most recent setup transactions after 1649123598",
+        "output": "print(TransactionFilter(data).by_func_name('setup').by_timestamp('1649123598').sort(reverse=True).get_result()[:2])"
+    },
+    {
+        "input": "Find 1 earliest before 1683272730",
+        "output": "print(TransactionFilter(data).by_timestamp('1683272730').sort().get_result())"
+    },
+    {
+        "input": "Find 10 oldest from a98999be71af674d1af930f98c8aa8f53134b3a02394cded274945f26be93770ac9d70d4fa3c9f8794ff44341cbcb873c0cf3435484559a9fe976b48704ec6728c on transactions",
+        "output": "print(TransactionFilter(data).by_src_pk('a98999be71af674d1af930f98c8aa8f53134b3a02394cded274945f26be93770ac9d70d4fa3c9f8794ff44341cbcb873c0cf3435484559a9fe976b48704ec6728c').by_func_name('on').sort().get_result())"
+    },
+    {
+        "input": "Display 4 oldest off transactions after 1633028522",
+        "output": "print(TransactionFilter(data).by_func_name('on').by_timestamp('1633028522').sort().get_result())"
+    },
+    {
+        "input": "Find 1 earliest to 9136bbc6aacb3205b26d84129d1092e6de053ae817bf88cd567f4cb234146362ed4b4332a47e20ec6b865da0a42854c909e23d4ae0bdac5213ffd532bbfbdb860c after 1673733519",
+        "output": "print(TransactionFilter(data).by_pk('9136bbc6aacb3205b26d84129d1092e6de053ae817bf88cd567f4cb234146362ed4b4332a47e20ec6b865da0a42854c909e23d4ae0bdac5213ffd532bbfbdb860c').by_timestamp('1673733519').sort().get_result()[:1])"
+    },
+    {
+        "input": "Find 6 earliest off function calls",
+        "output": "print(TransactionFilter(data).by_func_name('on').sort().get_result()[:6])"
+    },
+    {
+        "input": "Find 4 oldest to 23531aca50ca0aaa5485125af20b2ca0c896c4ab535d3c52c47a97def48cc900375e4a6f0cfad5d1d14c2db5abc6de267bfe3faba67cb7ebaefacacfd0739561bb from 3bb4bd8c01f497751796bf68ef3a403c6f4d739257087d83169d0dbc495931e42ca14c4e944b5aa59541ee7888307bad0c50cc595fe26ff929e1bb0f201d83f3cd",
+        "output": "print(TransactionFilter(data).by_pk('23531aca50ca0aaa5485125af20b2ca0c896c4ab535d3c52c47a97def48cc900375e4a6f0cfad5d1d14c2db5abc6de267bfe3faba67cb7ebaefacacfd0739561bb').by_src_pk('3bb4bd8c01f497751796bf68ef3a403c6f4d739257087d83169d0dbc495931e42ca14c4e944b5aa59541ee7888307bad0c50cc595fe26ff929e1bb0f201d83f3cd').sort().get_result())"
+    }
+]

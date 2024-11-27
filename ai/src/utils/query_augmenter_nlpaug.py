@@ -50,7 +50,7 @@ class QueryAugmenterNlpAug:
 
         # 템플릿 구성요소 정의
         self.template_components = {
-            'action_verbs': ['show', 'get', 'display', 'find'],
+            'action_verbs': ['show', 'get', 'display', 'find', 'list'],
             'quantity_words': ['last', 'recent', 'latest', 'previous', 'past'],
             'transaction_terms': ['transactions', 'transaction records', 'transaction history', 'entries']
         }
@@ -90,8 +90,6 @@ class QueryAugmenterNlpAug:
                                for item in sublist])
         self.number_pattern = re.compile(f'\\b({number_words}|\\d+)\\s+{"|".join(self.template_components["transaction_terms"])}\\b', 
                                        re.IGNORECASE)
-        
-        self.CODE_PREFIX = "print(TransactionFilter(data)"
 
         try:
             # NlpAug 증강기 초기화 - 보수적인 파라미터 설정
@@ -129,6 +127,7 @@ class QueryAugmenterNlpAug:
         hex_chars = '01234567889abcdef'
         return ''.join(random.choice(hex_chars) for _ in range(length))
     
+
     def _replace_hex_values(self, text: str) -> Tuple[str, dict]:
         """텍스트 내의 130자리 16진수를 새로운 랜덤값으로 대체하고 매핑 정보 반환"""
         new_text = text
@@ -293,28 +292,30 @@ class QueryAugmenterNlpAug:
     
     def _generate_filter_code(self, values: dict) -> str:
         """분석된 값을 기반으로 공백없는 필터 코드 생성"""
-        filter_parts = []
+        # 기본 템플릿 구조
+        template = "print(TransactionFilter(data){chain}.get_result(){transaction_count})"
         
+        # 체인 부분 구성
+        chain_parts = []
         if values['func_name']:
-            filter_parts.append(f"by_func_name{self._wrap_value(values['func_name'])}")
+            chain_parts.append(f"by_func_name{self._wrap_value(values['func_name'])}")
         if values['src_pk']:
-            filter_parts.append(f"by_src_pk{self._wrap_value(values['src_pk'])}")
+            chain_parts.append(f"by_src_pk{self._wrap_value(values['src_pk'])}")
         if values['pk']:
-            filter_parts.append(f"by_pk{self._wrap_value(values['pk'])}")
+            chain_parts.append(f"by_pk{self._wrap_value(values['pk'])}")
         if values['timestamp']:
-            filter_parts.append(f"by_timestamp{self._wrap_value(values['timestamp'])}")
+            chain_parts.append(f"by_timestamp{self._wrap_value(values['timestamp'])}")
             
-        if filter_parts:
-            filter_chain = '.'.join(filter_parts) + '.get_result()'
-            
-            if values['transaction_count']:
-                code = f"{self.CODE_PREFIX}.{filter_chain}[:{values['transaction_count']}])"
-            else:
-                code = f"{self.CODE_PREFIX}.{filter_chain})"
-                
-            return self._clean_output_code(code)
+        # 체인과 트랜잭션 카운트 구성
+        chain = f".{'.'.join(chain_parts)}" if chain_parts else ""
+        transaction_count = f"[:{values['transaction_count']}]" if values['transaction_count'] else ""
         
-        return None
+        return self._clean_output_code(
+            template.format(
+                chain=chain,
+                transaction_count=transcation_count
+            )
+        )
 
     def _create_number_specific_variations(self, text: str) -> List[str]:
         """템플릿 기반 변형 생성 - 항상 랜덤 pk 사용하기"""

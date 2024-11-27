@@ -10,7 +10,7 @@ class ModelConfig:
     BATCH_SIZE = 4 
     LEARNING_RATE = 2e-4
     WEIGHT_DECAY = 0.05
-    NUM_EPOCHS = 3
+    NUM_EPOCHS = 5
     PATIENCE = 5
     
     # 생성 파라미터
