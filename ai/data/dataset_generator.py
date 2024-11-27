@@ -1,14 +1,13 @@
 import random
 import json
 import os
+import re
 
 class TransactionFilterDatasetGenerator:
     def __init__(self):
-        self.functions = ['setup', 'on', 'off']
-        self.commands = ['Show', 'Find', 'Get', 'Display']
-        self.transaction_types = ['transactions', 'function calls']
-        self.sort_orders = ['earliest', 'latest', 'most recent', 'oldest']
-        self.keys = ['pk', 'src_pk', 'func_name']
+        self.commands = ['Fetch', 'Get', 'Query', 'Load', 'Read', 'Pull', 'Show', 'List']
+        self.sort_orders = ['recent', 'earliest']
+        self.functions = ['setup function', 'on function', 'off function']
     
     def random_pk(self):
         return ''.join(random.choices('abcdef0123456789', k=130))
@@ -18,26 +17,33 @@ class TransactionFilterDatasetGenerator:
     
     def generate_input(self):
         command = random.choice(self.commands)
-        count = random.randint(1, 10)
-        tx_type = random.choice(self.transaction_types)
-        sort_order = random.choice(self.sort_orders)
-        
-        # 필터 랜덤 적용
+        count = None
+        sort_order = None
+
         conditions = []
-        if random.choice([True, False]):  # pk 조건 랜덤
+
+        if random.choice([True, False]):  
             address = self.random_pk()
-            conditions.append(f"to {address}" if tx_type == 'transactions' else f"to {address}")
-        if random.choice([True, False]):  # src_pk 조건 랜덤
+            conditions.append(f"to {address}")
+
+        if random.choice([True, False]):  
             address = self.random_pk()
-            conditions.append(f"from {address}" if tx_type == 'transactions' else f"from {address}")
-        if random.choice([True, False]):  # func_name 조건 랜덤
+            conditions.append(f"from {address}")
+
+        if random.choice([True, False]): 
             func = random.choice(self.functions)
-            conditions.append(f"{func} {tx_type}")
-        if random.choice([True, False]):  # timestamp 조건 랜덤
+            conditions.append(f"{func}")
+
+        if random.choice([True, False]):  
             timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"])
             conditions.append(timestamp)
-        
-        # 최소 하나의 필터 강제 포함
+
+        if random.choice([True, False]):
+            count = random.randint(1, 10)
+
+        if random.choice([True, False]):
+            sort_order = random.choice(self.sort_orders)
+
         if not conditions:
             fallback_filter = random.choice(['to', 'from', 'func', 'timestamp'])
             if fallback_filter == 'to':
@@ -48,16 +54,17 @@ class TransactionFilterDatasetGenerator:
                 conditions.append(f"from {address}")
             elif fallback_filter == 'func':
                 func = random.choice(self.functions)
-                conditions.append(f"{func} {tx_type}")
+                conditions.append(f"{func}")
             elif fallback_filter == 'timestamp':
                 timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"])
                 conditions.append(timestamp)
 
         condition = " ".join(conditions).strip()
-        return f"{command} {count} {sort_order} {condition}".strip()
+            
+        return f"{command} {count if count else ''} {sort_order if sort_order else ''} {condition}".strip()
     
     def generate_output(self, input_text):
-        filter_chain = "TransactionFilter(data)"
+        filter_chain = ""
         
         if "to " in input_text:
             pk = input_text.split("to ")[-1].split()[0]
@@ -71,18 +78,18 @@ class TransactionFilterDatasetGenerator:
         if "after " in input_text or "before " in input_text:
             timestamp = input_text.split("after ")[-1].split()[0] if "after " in input_text else input_text.split("before ")[-1].split()[0]
             filter_chain += f".by_timestamp('{timestamp}')"
-        if "earliest" in input_text or "oldest" in input_text:
+        if "earliest" in input_text:
             filter_chain += ".sort()"
-        elif "latest" in input_text or "most recent" in input_text:
+        elif "recent" in input_text:
             filter_chain += ".sort(reverse=True)"
         
-        if random.choice([True, False]):  # count 슬라이싱 랜덤 적용
-            count = int(input_text.split()[1])
+        if re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text):
+            count = int(re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text)[0])
             filter_chain += f".get_result()[:{count}]"
         else:
             filter_chain += ".get_result()"
         
-        return f"print({filter_chain})"
+        return f"print(TransactionFilter(data){filter_chain})"
     
     def generate_dataset(self, n=10):
         dataset = []
@@ -95,19 +102,18 @@ class TransactionFilterDatasetGenerator:
             })
         return dataset
 
-# 예시 사용
+
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(50)
+dataset = generator.generate_dataset(500)
 generated_dataset = {
-    "datasets": dataset
+    "dataset": dataset
 }
 
-# for entry in dataset:
-#     print(entry)
 
-file_path = './ai/data/raw/generated_dataset.json'
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+file_path = os.path.join(project_root,'ai', 'data', 'raw', 'generated_dataset.json')
 os.makedirs(os.path.dirname(file_path), exist_ok=True)
 with open(file_path, 'w') as json_file:
-    json.dump(dataset, json_file, indent=4)
+    json.dump(generated_dataset, json_file, indent=4)
 
 print(f"JSON 파일이 {file_path}에 저장되었습니다.")

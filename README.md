@@ -23,11 +23,183 @@ This document will detail the AI model development process for AI_dashboard. We 
 Our solution eliminates intermediary-related data corruption risks, improves accessibility for non-technical users, maintains data integrity through blockchain immutability, provides real-time data analysis capabilities, and ensures secure local processing of sensitive information.
 
 ## Datasets
+1. `generated_dataset.json` : Primary dataset containing 50 pairs of:
+    - Natural language queries for transaction filtering
+    - Corresponding Python code implementations
+    - Queries include various conditions such as:
+        - Public key filtering (Both source and destination)
+        - Timestamp-based filtering
+        - Function name filtering (setup, on, off)
+        - Sort orders (earliest, latest, most recent, oldest)
+        - Result count limitations
 
-tbd ...
+2. `augmented_dataset.json` : An enhanced version of the generated dataset created through NLP augmentation techniques to increase data diversity while maintaining query-code consistency.
+
+The detailed generation and augmentation processes are described in the Methodology section.
 
 ## Methodology
-### Natural Language Command Augmentation with GPT API
+### Dataset Generation
+We implemented a `TransactionFilterDatasetGenerator` class to create diverse yet structurally consistent query-code paris. The generator uses the following components:
+
+    ```python
+    commands = ['List']
+    sort_orders = ['earliest', 'recent']
+    functions = ['setup function', 'on function', 'off function']
+    ```
+The generation process involves:
+
+1. Query Generation:
+    - Randomly selects a commmand, sort_order, functions, pk, src_pk, timestamp, and count.
+        ```python
+        return f"{command} {count if count else ''} {sort_order if sort_order else ''} {condition}".strip()
+        ```
+    - Applies random combinations of filtering conditions:
+        - Public key filtering (to/from address)
+        - Function name filtering
+        - Timestamp filtering
+            ```python
+            # random pk
+            if random.choice([True, False]):  
+                address = self.random_pk()
+                conditions.append(f"to {address}")
+            
+            # random src_pk
+            if random.choice([True, False]):  
+                address = self.random_pk()
+                conditions.append(f"from {address}")
+
+            # random func_name
+            if random.choice([True, False]): 
+                func = random.choice(self.functions)
+                conditions.append(f"{func}")
+
+            # random timestamp 
+            if random.choice([True, False]):  
+                timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"])
+                conditions.append(timestamp)
+            ```
+    - Ensures at least one filter condition is always included
+        ```python
+            # At least one condition is needed
+                if not conditions:
+                    fallback_filter = random.choice(['to', 'from', 'func', 'timestamp'])
+                    if fallback_filter == 'to':
+                        address = self.random_pk()
+                        conditions.append(f"to {address}")
+                    elif fallback_filter == 'from':
+                        address = self.random_pk()
+                        conditions.append(f"from {address}")
+                    elif fallback_filter == 'func':
+                        func = random.choice(self.functions)
+                        conditions.append(f"{func}")
+                    elif fallback_filter == 'timestamp':
+                        timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"])
+                        conditions.append(timestamp)
+            ```
+
+2. Code Generation:
+    - Constructs filter chain based on the query conditions
+        ```python
+        filter_chain = ""
+
+        if "to " in input_text:
+            pk = input_text.split("to ")[-1].split()[0]
+            filter_chain += f".by_pk('{pk}')"
+            
+        if "from " in input_text:
+            src_pk = input_text.split("from ")[-1].split()[0]
+            filter_chain += f".by_src_pk('{src_pk}')"
+
+        if any(func in input_text for func in self.functions):
+            func_name = next(func for func in self.functions if func in input_text)
+            filter_chain += f".by_func_name('{func_name}')"
+
+        if "after " in input_text or "before " in input_text:
+            timestamp = input_text.split("after ")[-1].split()[0] if "after " in input_text else input_text.split("before ")[-1].split()[0]
+            filter_chain += f".by_timestamp('{timestamp}')"
+
+        if "earliest" in input_text or "oldest" in input_text:
+            filter_chain += ".sort()"
+
+        elif "latest" in input_text or "most recent" in input_text:
+            filter_chain += ".sort(reverse=True)"
+        
+        if re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text):
+            count = int(re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text)[0])
+            filter_chain += f".get_result()[:{count}]"
+
+        else:
+            filter_chain += ".get_result()"
+
+Examples of a `generated_dataset` pair:
+
+```json
+{
+    "dataset": [
+        {
+            "input": "Give  earliest from 4d494b88117d00842c348de49a8739f1c28a28a26c0da53b2bdfe6fc4378048170fa9b1bf455cf996e08fd52bfc46358666251dabb0c8f27796397a281226e0816",
+            "output": "print(TransactionFilter(data).by_src_pk('4d494b88117d00842c348de49a8739f1c28a28a26c0da53b2bdfe6fc4378048170fa9b1bf455cf996e08fd52bfc46358666251dabb0c8f27796397a281226e0816').sort().get_result())"
+        },
+        {
+            "input": "Retrieve 1 oldest to 53e726abfeefa4dc8dbd1afb1d3142b22361ffd5f42bb3277a10f5ce3652cf2b82ac39a9f9321492be1c4e091efc92dd67540175b6272d3c824a8c8c544604f6aa",
+            "output": "print(TransactionFilter(data).by_pk('53e726abfeefa4dc8dbd1afb1d3142b22361ffd5f42bb3277a10f5ce3652cf2b82ac39a9f9321492be1c4e091efc92dd67540175b6272d3c824a8c8c544604f6aa').sort().get_result()[:1])"
+        },
+        {
+            "input": "Give 7  to 97c8c74fa1b10823ce5c55f3ff43a886d4101cc7d03e9630e01715e7ff17f6e86e0c248ffea16a24d20cffa68b293f26ec9dc2ca36ee70cffa339f91a1c871e332 from 259789c392669608e7f366f125746f46cd0107e4b440c56c4c430e74fe1cd5528fa54e43fbbce2d2acb1e24482e09f7afe815c558f1d1b16c906fffb6adb61f4cb off function",
+            "output": "print(TransactionFilter(data).by_pk('97c8c74fa1b10823ce5c55f3ff43a886d4101cc7d03e9630e01715e7ff17f6e86e0c248ffea16a24d20cffa68b293f26ec9dc2ca36ee70cffa339f91a1c871e332').by_src_pk('259789c392669608e7f366f125746f46cd0107e4b440c56c4c430e74fe1cd5528fa54e43fbbce2d2acb1e24482e09f7afe815c558f1d1b16c906fffb6adb61f4cb').by_func_name('off function').get_result()[:7])"
+        }
+    ]
+}
+```
+
+### Data Augmentation
+#### Overview
+The data augmentation process in this project enhances the diversity and robustness of training data by applying advanced NLP augmentation techniques. The goal is to simulate natural variations in query expressions while maintaining semantic consistency with the corresponding code outputs. This ensures that models trained on the data generalize better to unseen inputs.
+
+#### Objectives
+1. Increase Data Diversity: By introducing natural variations to input queries, the model becomes more resilient to changes in phrasing, structure, and synonyms.
+2. Preserve Semantic Integrity: While inputs are modified, the augmented outputs maintain functional correctness by aligning with the input semantics.
+3. Simulate Real-world Inputs: The process mimics variations in human queries, preparing the model to handle diverse language patterns.
+
+#### Augmentation Techniques
+The augmentation process leverages NLP Augmentation (NlpAug) with the following techniques:
+
+1. Synonym Replacement
+    - Uses `naw.SynonymAug` to replace words in the input text with their synonyms from WordNet.
+    - Preserves critical keywords (e.g., function names, transaction terms, and specific hex patterns) by dynamically generating stopwords.
+    - Example: "show three transactions" → "display three transactions."
+
+2. Contextual Word Substitution
+    - Uses `naw.ContextualWordEmbsAug` with a pre-trained bert-base-uncased model to replace words based on context.
+    - Ensures replacements fit naturally within the query's structure.
+    - Example: "retrieve the latest transactions" → "fetch the latest transactions."
+
+3. Contextual Word Insertion
+    - Inserts contextually appropriate words into the input query, enriching its phrasing while maintaining meaning.
+    - Example: "list transactions before timestamp" → "list all transactions before the given timestamp."
+
+4. Pattern-based Variations
+    - Template-based variations are applied to generate diverse queries while preserving the intent.
+    - Variations include:
+        - Adding or altering temporal expressions (e.g., "before timestamp").
+        - Incorporating PK (primary key) and hexadecimal representations.
+    - Example:
+    Template: "{action} {number} {trans} {time_rel} {time_ctx}"
+    - Generated Query: "show three transactions after this timestamp."
+
+#### Validation and Consistency
+To ensure the quality and relevance of augmented data:
+
+1. Keyword Preservation: Critical keywords (e.g., function names, PKs, timestamps) are detected and preserved.
+2. Structural Mapping: Hexadecimal values and timestamps are dynamically replaced while maintaining mapping consistency.
+3. Output Validation: Augmented outputs are tested against original outputs to ensure functional equivalence.
+
+#### Data Integrity
+- Redundant or invalid augmented pairs are filtered out.
+- Only unique, validated input-output pairs are included in the final dataset.
+
+---
+
 
 To enhance the diversity and flexibility of natural language commands, we use OpenAI's GPT API for data augmentation. This approach generates alternative expressions of input commands, allowing the system to generalize and adapt to various linguistic structures. Below is the detailed methodology:
 
