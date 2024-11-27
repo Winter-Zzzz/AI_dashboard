@@ -1,15 +1,33 @@
 import  React from 'react';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { Typography, Box } from '@mui/material';
-import { tpsData, getTPSColor, valueFormatter } from '../dataset/TPSDistribution';
 import { CHART_DIMENSIONS } from './chartDimensions';
 
-const chartData = tpsData.map(item => ({
-  ...item,
-  color: getTPSColor(item.label)
-}))
+const timeColors = {
+  '00-04': '#26a69a',
+  '04-08': '#42a5f5',
+  '08-12': '#7e57c2',
+  '12-16': '#5c6bc0',
+  '16-20': '#ec407a',
+  '20-24': '#66bb6a'
+};
 
-export default function PieChartComponent() {
+const PieChartComponent = ({ data }) => {
+  // Process data for the pie chart
+  const chartData = React.useMemo(() => {
+    if (!data?.timeDistribution) {
+      return [];
+    }
+
+    return data.timeDistribution.map(item => ({
+      id: item.name,
+      value: item.value,
+      label: item.name,
+      color: timeColors[item.name] || '#999999'
+    }));
+  }, [data]);
+
+  const valueFormatter = (value) => `${value} TPS`;
   return (
     <Box sx={{ 
       width: CHART_DIMENSIONS.width, 
@@ -63,3 +81,5 @@ export default function PieChartComponent() {
     </Box>
   );
 }
+
+export default PieChartComponent;
