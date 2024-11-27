@@ -4,9 +4,9 @@ import { RotateCw } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import ChatBox from './components/ChatBox';
 import BarChartComponent from './components/BarChartComponent';
-import PieChartComponent from './components/PieChartComponent';
 import TPSChart from './components/TPSChart';
 import getTransactions from './dataset/getTransactions';
+import MetricCards from './components/MetricCards';
 
 const App = () => {
   const [activeMenu, setActiveMenu] = useState('Dashboard');
@@ -183,7 +183,7 @@ const App = () => {
               justifyContent: 'center',
               alignItems: 'center'
             }}>
-              <PieChartComponent data={transactionData} />
+              <MetricCards data={transactionData} />
             </div>
           </div>
         </div>
