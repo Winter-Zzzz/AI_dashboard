@@ -7,7 +7,11 @@ from datetime import datetime
 import shutil
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from torch.optim import AdamW
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
+from transformers import get_linear_schedule_with_warmup
+import re
+import matplotlib.pyplot as plt
+import json
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
@@ -68,218 +72,265 @@ class QueryDataset(Dataset):
             'labels': labels
         }
 
-def train_model():
-    log_file = os.path.join('logs', 'training_logs.txt')
-    logging.basicConfig(
-        filename=log_file,
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+def show_training_example(model, batch, tokenizer, device, config):
+    """학습 중인 배치에서 예시 출력을 생성하는 함수"""
+    with torch.no_grad():
+        generated = model.generate(
+        input_ids=batch['input_ids'][:1].to(device),
+        attention_mask=batch['attention_mask'][:1].to(device),
+        max_length=config.MAX_GEN_LENGTH,
+        num_beams=config.NUM_BEAMS,
+        temperature=config.TEMPERATURE,
+        top_p=config.TOP_P,
+        early_stopping=True,
+)
+        
+        input_text = tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False)
+        target_text = tokenizer.decode(batch['labels'][0], skip_special_tokens=False)
+        generated_text = tokenizer.decode(generated[0], skip_special_tokens=False)
+        
+        print("\n=== Training Example ===")
+        print(f"Input: {input_text}")
+        print(f"Target: {target_text}")
+        print(f"Generated: {generated_text}")
+        print("-" * 80)
 
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(formatter)
-    logging.getLogger('').addHandler(console_handler)
+def evaluate_model(model, test_dataloader, tokenizer, device):
+    """학습 완료 후 전체 테스트 데이터에 대한 평가를 수행하는 함수"""
+    model.eval()
+    total_loss = 0
+    all_examples = []
     
+    print("\n=== Final Model Evaluation ===")
+    with torch.no_grad():
+        for batch in tqdm(test_dataloader, desc="Evaluating"):
+            # 손실 계산
+            outputs = model(
+                input_ids=batch['input_ids'].to(device),
+                attention_mask=batch['attention_mask'].to(device),
+                labels=batch['labels'].to(device)
+            )
+            total_loss += outputs.loss.item()
+            
+            # 예시 생성
+            generated = model.generate(
+                input_ids=batch['input_ids'].to(device),
+                attention_mask=batch['attention_mask'].to(device),
+                max_length=config.MAX_GEN_LENGTH,
+                num_beams=config.NUM_BEAMS,
+                temperature=config.TEMPERATURE,
+                top_p=config.TOP_P,
+                early_stopping=True,
+            )
+            
+            # 배치의 모든 예시 저장
+            for i in range(len(generated)):
+                input_text = tokenizer.decode(batch['input_ids'][i], skip_special_tokens=True)
+                target_text = tokenizer.decode(batch['labels'][i], skip_special_tokens=True)
+                generated_text = tokenizer.decode(generated[i], skip_special_tokens=True)
+                
+                all_examples.append({
+                    'input': input_text,
+                    'target': target_text,
+                    'generated': generated_text
+                })
+    
+    avg_loss = total_loss / len(test_dataloader)
+    print(f"\nAverage Test Loss: {avg_loss:.4f}")
+    
+    # 전체 결과를 파일로 저장
+    with open('evaluation_results.txt', 'w', encoding='utf-8') as f:
+        for i, example in enumerate(all_examples, 1):
+            f.write(f"\nExample {i}:\n")
+            f.write(f"Input: {example['input']}\n")
+            f.write(f"Target: {example['target']}\n")
+            f.write(f"Generated: {example['generated']}\n")
+            f.write("-" * 80 + "\n")
+    
+    return avg_loss, all_examples
+
+class TrainingTracker:
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        os.makedirs(self.log_dir, exist_ok=True)
+        self.training_history = {
+            'epochs': [],
+            'train_loss': [],
+            'improvement': [],
+        }
+        self.best_loss = float('inf')
+    
+    def update(self, epoch, train_loss):
+        self.training_history['epochs'].append(epoch)
+        self.training_history['train_loss'].append(train_loss)
+        
+        improved = train_loss < self.best_loss
+        self.training_history['improvement'].append(improved)
+        if improved:
+            self.best_loss = train_loss
+        
+        self.plot_progress()
+        self.save_status()
+        
+        return improved
+    
+    def plot_progress(self):
+        plt.figure(figsize=(12, 6))
+        plt.plot(self.training_history['epochs'], 
+                self.training_history['train_loss'], 
+                label='Training Loss', 
+                marker='o')
+        
+        improved_epochs = [e for i, e in enumerate(self.training_history['epochs']) 
+                         if self.training_history['improvement'][i]]
+        improved_losses = [l for i, l in enumerate(self.training_history['train_loss']) 
+                         if self.training_history['improvement'][i]]
+        
+        if improved_epochs:
+            plt.scatter(improved_epochs, improved_losses, 
+                       color='green', s=100, 
+                       label='Improvement', 
+                       zorder=5)
+        
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training Progress')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.savefig(os.path.join(self.log_dir, 'training_progress.png'))
+        plt.close()
+    
+    def save_status(self):
+        status = {
+            'current_epoch': self.training_history['epochs'][-1],
+            'best_loss': self.best_loss,
+            'last_train_loss': self.training_history['train_loss'][-1],
+            'total_improvements': sum(self.training_history['improvement'])
+        }
+        
+        status_file = os.path.join(self.log_dir, 'training_status.json')
+        with open(status_file, 'w') as f:
+            json.dump(status, f, indent=4)
+
+def train_model():
     config = ModelConfig()
-    print(project_root)
-    data_file = os.path.join(project_root, 'data', 'raw', 'generated_dataset.json')
+    tracker = TrainingTracker(os.path.join(project_root, 'logs'))
+    data_file = os.path.join(project_root, 'data', 'augmented', 'augmented_dataset.json')
     input_texts, output_texts = load_training_data(data_file)
     
     if len(input_texts) == 0 or len(output_texts) == 0:
-        logging.error("Dataset is empty!")
         return None, None
 
-    try:
-        tokenizer = T5Tokenizer.from_pretrained(config.MODEL_NAME, legacy=False)
-        tokenizer.add_prefix_space = True
-        model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
+    tokenizer = T5Tokenizer.from_pretrained(config.MODEL_NAME, legacy=False)
+    tokenizer.add_prefix_space = True
+    model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
 
-        special_tokens = {
-            'additional_special_tokens': [
-                'print(TransactionFilter(data)',
-                'get_result()',
-                '.by_pk',
-                '.by_src_pk',
-                '.by_timestamp',
-                '.by_func_name',
-                "('setup')",
-                "('on')",
-                "('off')",
-                '.sort(reverse=True)',
-                '.sort()',
-                '.',
-                ')'
-            ]
-        }
+    special_tokens = {
+        'additional_special_tokens': [
+            'print(TransactionFilter(data)',
+            'get_result()',
+            '.by_pk', 
+            '.by_src_pk',
+            '.by_timestamp',
+            '.by_func_name',
+            "('setup')",
+            "('on')",
+            "('off')",
+            '.sort(reverse=True)',
+            '.sort()',
+            '.',
+            ')',
+        ]
+    }
 
-        tokenizer.add_special_tokens(special_tokens)
-        model.resize_token_embeddings(len(tokenizer))
-        model = model.to(device)
-        logging.info(f"Model and tokenizer loaded (Using {device})")
+    tokenizer.add_special_tokens(special_tokens)
+    model.resize_token_embeddings(len(tokenizer))
+    model = model.to(device)
 
-    except Exception as e:
-        logging.error(f"Error loading model: {str(e)}")
-        return None, None
+    # 데이터셋을 train과 test로 분할 (90:10)
+    full_dataset = QueryDataset(input_texts, output_texts, tokenizer, config.MAX_LENGTH)
+    train_size = int(0.9 * len(full_dataset))
+    test_size = len(full_dataset) - train_size
+    train_dataset, test_dataset = random_split(full_dataset, [train_size, test_size])
 
-    train_dataset = QueryDataset(input_texts, output_texts, tokenizer, config.MAX_LENGTH)
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=config.BATCH_SIZE,
-        shuffle=True
-    )
-
-    optimizer = AdamW(
-        model.parameters(),
-        lr=config.LEARNING_RATE,
-        weight_decay=config.WEIGHT_DECAY
-    )
-
-    best_loss = float('inf')
-    no_improve = 0
-
-    try:
-        for epoch in range(config.NUM_EPOCHS):
-            model.train()
-            total_loss = 0
-            progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{config.NUM_EPOCHS}")
-
-            for batch in progress_bar:
-                input_ids = batch['input_ids'].to(device)
-                attention_mask = batch['attention_mask'].to(device)
-                labels = batch['labels'].to(device)
-
-                optimizer.zero_grad()
-
-                outputs = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=labels
-                )
-
-                loss = outputs.loss
-                total_loss += loss.item()
-
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
-                optimizer.step()
-
-                progress_bar.set_postfix({'batch_loss': f"{loss.item():.4f}"})
-
-            avg_loss = total_loss / len(train_dataloader)
-            logging.info(f"Epoch {epoch+1}, Average Loss: {avg_loss:.4f}")
-
-            if avg_loss < best_loss:
-                best_loss = avg_loss
-                no_improve = 0
-                save_path = os.path.join(project_root, 'models', 'best_model')
-                
-                try:
-                    temp_path = os.path.join(project_root, 'models', 'temp_model')
-                    os.makedirs(temp_path, exist_ok=True)
-                    
-                    model.save_pretrained(temp_path)
-                    tokenizer.save_pretrained(temp_path)
-                    
-                    if os.path.exists(save_path):
-                        backup_path = f"{save_path}_backup"
-                        if os.path.exists(backup_path):
-                            shutil.rmtree(backup_path)
-                        shutil.copytree(save_path, backup_path)
-                    
-                    if os.path.exists(save_path):
-                        shutil.rmtree(save_path)
-                    shutil.copytree(temp_path, save_path)
-                    
-                    shutil.rmtree(temp_path)
-                    
-                    print(f"Model saved successfully to: {save_path}")
-                    print(f"Saved files:", os.listdir(save_path))
-                    logging.info(f"Best model saved (loss: {best_loss:.4f}) to {save_path}")
-                    
-                except Exception as e:
-                    print(f"Error saving model: {str(e)}")
-                    logging.error(f"Error saving model: {str(e)}")
-                    if os.path.exists(f"{save_path}_backup"):
-                        shutil.rmtree(save_path)
-                        shutil.copytree(f"{save_path}_backup", save_path)
+    train_dataloader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=config.BATCH_SIZE, shuffle=False)
     
-            else:
-                no_improve += 1
-                if no_improve >= config.PATIENCE:
-                    msg = f"\nStopping early after {config.PATIENCE} epochs without improvement"
-                    print(msg)
-                    logging.info(msg)
-                    break
+    optimizer = AdamW(model.parameters(), 
+                 lr=config.LEARNING_RATE,
+                 weight_decay=config.WEIGHT_DECAY)
+    
+    num_training_steps = len(train_dataloader) * config.NUM_EPOCHS
+    num_warmup_steps = int(num_training_steps * config.WARM_UP_RATIO)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=num_training_steps
+    )
+    patience = config.PATIENCE
+    no_improve = 0
+    best_loss = float('inf')
 
-            if (epoch + 1) % 3 == 0:
-                model.eval()
-                test_input = input_texts[0]
-                print(f"\nTesting current model:")
-                print(f"Input: {test_input}")
-                
-                test_inputs = tokenizer(
-                    test_input,
-                    return_tensors="pt",
-                    max_length=config.MAX_LENGTH,
-                    padding=True,
-                    truncation=True,
-                    add_special_tokens=True
-                ).to(device)
+    print("🚀 Starting training...")
+    for epoch in range(config.NUM_EPOCHS):
+        model.train()
+        total_loss = 0
+        
+        progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}")
+        for i, batch in enumerate(progress_bar):
+            optimizer.zero_grad()
+            
+            output = model(
+                input_ids=batch['input_ids'].to(device),
+                attention_mask=batch['attention_mask'].to(device), 
+                labels=batch['labels'].to(device)
+            )
+            
+            loss = output.loss
+            loss.backward()
+            # loss.backward() 다음에 추가
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
+            optimizer.step()
+            scheduler.step()
+            total_loss += loss.item()
+            
+            progress_bar.set_postfix({'loss': f'{loss.item():.4f}'})
+            
+            # 100배치마다 예시 출력
+            if (i + 1) % 100 == 0:
+                show_training_example(model, batch, tokenizer, device, config)
 
-                with torch.no_grad():
-                    outputs = model.generate(
-                        input_ids=test_inputs['input_ids'],
-                        attention_mask=test_inputs['attention_mask'],
-                        max_length=config.MAX_GEN_LENGTH,
-                        num_beams=config.NUM_BEAMS,
-                        temperature=config.TEMPERATURE,
-                        top_p=config.TOP_P,
-                        do_sample=True,
-                        no_repeat_ngram_size=2,
-                        early_stopping=True,
-                        bad_words_ids=[[tokenizer.pad_token_id]],
-                    )
+        avg_train_loss = total_loss / len(train_dataloader)
+        print(f"\nEpoch {epoch+1}")
+        print(f"Average Training Loss: {avg_train_loss:.4f}")
 
-                def clean_generated_text(text: str) -> str:
-                    special_tokens = ["<pad>", "</s>"]
-                    for token in special_tokens:
-                        text = text.replace(token, "")
+        improved = tracker.update(epoch + 1, avg_train_loss)
+        if improved:
+            print(f"✨ New best loss achieved!")
+            model.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
+            tokenizer.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
+            no_improve = 0
+        else:
+            no_improve += 1
+            print(f"No improvement for {no_improve} epochs")
+            if no_improve >= patience:
+                print("🛑 Early stopping triggered!")
+                break
 
-                    text = " ".join(text.split())
-
-                    text = text.replace(" (", "(")
-                    text = text.replace(" )", ")")
-                    text = text.replace(" .", ".")
-                    text = text.replace(" [", "[")
-                    text = text.replace(" ]", "]")
-                    text = text.replace(" :", ":")
-                    text = text.replace(" ,", ",")
-
-                    return text.strip()
-
-                generated = clean_generated_text(tokenizer.decode(outputs[0], clean_up_tokenization_spaces=True))
-                
-                print(f"Output: {generated}\n")
-                logging.info(f"Test generation result: {generated}")
-
-    except Exception as e:
-        error_msg = f"\nTraining error: {str(e)}"
-        print(error_msg)
-        logging.error(error_msg)
-        return None, None
-
-    logging.info("Training completed!")
-    print("Training completed!")
+    # 학습 완료 후 전체 평가 수행
+    print("\n📊 Performing final evaluation...")
+    final_loss, examples = evaluate_model(model, test_dataloader, tokenizer, device, config)
+    print(final_loss, examples)
+    
     return model, tokenizer
 
 if __name__ == "__main__":
     os.makedirs('logs', exist_ok=True)
-    print("Starting model training...")
+    print("🚀 Starting model training...")
     model, tokenizer = train_model()
     
     if model is not None and tokenizer is not None:
-        print("Training completed successfully!")
+        print("✅ Training completed successfully!")
     else:
-        print("Training failed!")
+        print("❌ Training failed!")

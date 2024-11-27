@@ -14,6 +14,184 @@ from typing import List
 # data_loader.py에서 load_training_data 함수 가져오기 
 from data_loader import load_training_data
 
+class QueryAugmenterNlpAug:
+    """입출력 텍스트를 토큰화하여 모델 학습용 데이터셋 생성"""
+    def __init__(self):
+        self._download_nltk_data()
+        self._init_patterns()
+        self._init_preserved_keywords()
+        self._init_number_variations()
+
+    def _download_nltk_data(self):
+        """NLTK 데이터 패키지가 설치되어 있는지 확인하고 없으면 다운로드"""
+        packages = ['wordnet', 'averaged_perceptron_tagger', 'averaged_perceptron_tagger_eng', 'punkt']
+        for package in packages:
+            try:
+                nltk.data.find(f'{package}')
+            except LookupError:
+                nltk.download(package)
+
+    def _init_patterns(self):
+        """텍스트에서 특정 패턴을 식별하기 위한 정규 표현식 초기화"""
+        self.patterns = {
+            'hex': re.compile(r'[0-9a-fA-F]{130}'), # 130자리 16진수 값
+            'from': re.compile(r'from\s+([0-9a-fA-F]{130})'), # from [hex]
+            'to': re.compile(r'to\s+([0-9a-fA-F]{130})'), # to [hex]
+            'timestamp': re.compile(r'\b\d{10}\b'), 
+            'func_name': re.compile(r'\b(setup function|on function|off function)\b', re.IGNORECASE) 
+        }
+    
+    def _init_preserved_keywords(self):
+        """모델 처리 중 변경하지 말아야 할 키워드"""
+        self.preserved_keywords = {
+            'setup funciton', 'on funciton', 'off function', 'to', 'from'
+        }
+
+    def _init_number_variations(self):
+        """숫자를 다양한 텍스트 표현과 매칭되도록 처리함"""
+        self.number_variations = { # 숫자 변형 정의
+            1: ['one', 'single', '1'],
+            2: ['two', 'couple', '2'],
+            3: ['three', '3'],
+            4: ['four', '4'],
+            5: ['five', '5'],
+            10: ['ten', '10']
+        }
+        number_words = '|'.join(item for sublist in self.number_variations.values() for item in sublist)
+        self.patterns['number'] = re.compile(
+            rf'\b(?!(?:[0-9a-fA-F]{{130}}|\d{{10}})\b)({number_words}|\d+)\b',
+            re.IGNORECASE
+        )
+
+    def is_preserved(self, word: str) -> bool:
+        """주어진 키워드가 보존되어야 하는 키워드인지 확인"""
+        return (
+            word in self.preserved_keywords or
+            any(pattern.match(word) for pattern in [self.patterns[key] for key in ['hex', 'from', 'to', 'timestamp']])
+    ) 
+
+    def get_stopwords_from_preserved(self, text: list) -> list:
+        """정지어 리스트 추출"""
+        stopwords = [word for word in text if self.is_preserved(word)]
+        return stopwords
+
+    def initialize_augmenter(self, texts: List[str]):
+        """입력된 텍스트 리스트를 사용하여 증강기를 초기화함"""
+
+        # 텍스트 결합 - 입력된 텍스트를 하나로 결합하고 이를 단어 단위로 나눔
+        combined_text = " ".join(texts)
+        words = combined_text.split()
+
+        # 정지어 생성 
+        stopwords = self.get_stopwords_from_preserved(words)
+
+        try:
+            self.augmenters = [
+                naw.SynonymAug( # WordNet을 사용해 동의어 치환 수행
+                    aug_src='wordnet',
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.ContextualWordEmbsAug( # BERT 모델을 사용해 문맥에 따라 단어 대체
+                    model_path='bert-base-uncased',
+                    action="substitute",
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.ContextualWordEmbsAug( # BERT 모델을 사용해 문맥에 따라 단어 삽입
+                    model_path='bert-base-uncased',
+                    action="insert",
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.RandomWordAug( # BERT 모델을 사용해 문맥에 따라 
+                    action="swap",
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                )
+            ]
+            logging.info("Augmenters initialized successfully")
+        except Exception as e:
+            logging.error(f"Failed to initialize augmenters: {str(e)}")
+            raise
+
+    def validate_function_keywords(self, text: str) -> bool:
+        """입력 텍스트의 function 키워드 유효성 검사"""
+        # off나 setup이 중복으로 나오는지만 체크
+        words = text.lower().split()
+        off_count = words.count('off')
+        setup_count = words.count('setup')
+        
+        # off나 setup이 1번 초과로 나오면 거부
+        return off_count <= 1 and setup_count <= 1
+
+    def clean_output_text(self, text: str) -> str:
+        """출력 텍스트 특수 처리"""
+        if 'TransactionFilter' in text:
+            # function 부분을 정리 (예: 'on function' -> 'on')
+            text = text.replace("'off function'", "'off'")
+            text = text.replace("'on function'", "'on'")
+            text = text.replace("'setup function'", "'setup'")
+            
+            # 메서드 체인 사이의 공백 제거
+            text = re.sub(r'\s*\.\s*', '.', text)
+            # 괄호 주변 공백 정리
+            text = re.sub(r'\(\s*', '(', text)
+            text = re.sub(r'\s*\)', ')', text)
+            return text.strip()
+        return text
+        
+
+    def filter_augmented_pairs(self, inputs: List[str], outputs: List[str]) -> Tuple[List[str], List[str]]:
+        """증강된 데이터 쌍 필터링"""
+        filtered_inputs = []
+        filtered_outputs = []
+        
+        for input_text, output_text in zip(inputs, outputs):
+            # function 키워드 유효성 검사
+            if self.validate_function_keywords(input_text):
+                cleaned_output = self.clean_output_text(output_text)
+                filtered_inputs.append(input_text)
+                filtered_outputs.append(cleaned_output)
+                
+        return filtered_inputs, filtered_outputs
+    
+    def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2) -> Tuple[List[str], List[str]]:
+        """입력 텍스트 변형과 해당 변형에 맞는 출력 텍스트 생성"""
+        augmented_inputs = []
+        augmented_outputs = []
+
+        # 초기 데이터 정리 및 필터링
+        input_texts, output_texts = self.filter_augmented_pairs(input_texts, output_texts)
+        self.initialize_augmenter(input_texts)
+
+        for idx, (input_text, output_text) in enumerate(zip(input_texts, output_texts)):
+            try:
+                for augmenter in self.augmenters:
+                    try:
+                        variations = augmenter.augment(input_text, n=num_variations)
+
+                        for var in variations:
+                            if 'UNK' not in var and self.validate_function_keywords(var):
+                                augmented_inputs.append(var)
+                                augmented_outputs.append(output_text)
+                    except Exception as e:
+                        logging.warning(f"Augmentation failed: {str(e)}")
+                        continue
+            except Exception as e:
+                logging.error(f"Error at index {idx}: {str(e)}")
+                continue
+
+        unique_pairs = list(dict.fromkeys(zip(augmented_inputs, augmented_outputs)))
+        if unique_pairs:
+            augmented_inputs, augmented_outputs = zip(*unique_pairs)
+            return list(augmented_inputs), list(augmented_outputs)
+        return [],[]
+    
 def save_augmented_data(augmented_inputs: List[str], augmented_outputs: List[str], file_path: str):
     """증강된 데이터를 augmented_dataset.json으로 저장"""
 
@@ -35,122 +213,6 @@ def save_augmented_data(augmented_inputs: List[str], augmented_outputs: List[str
     print(f"저장 위치: {os.path.abspath(file_path)}")
     
     return data
-
-class QueryAugmenterNlpAug:
-    def __init__(self):
-        self._download_nltk_data()
-        self._init_patterns()
-        self._init_preserved_keywords()
-        self._init_number_variations()
-    
-    def _download_nltk_data(self):
-        packages = ['wordnet', 'averaged_perceptron_tagger', 'punkt']
-        for package in packages:
-            try:
-                nltk.data.find(f'{package}')
-            except LookupError:
-                nltk.download(package)
-
-    def _init_patterns(self):
-        self.patterns = {
-            'hex': re.compile(r'[0-9a-fA-F]{130}'),
-            'from': re.compile(r'from\s+([0-9a-fA-F]{130})'),
-            'to': re.compile(r'to\s+([0-9a-fA-F]{130})'),
-            'timestamp': re.compile(r'\b\d{10}\b'),
-            'func_name': re.compile(r'\b(setup function|on function|off function)\b', re.IGNORECASE)
-        }
-    
-    def _init_preserved_keywords(self):
-        self.preserved_keywords = {
-            'setup funciton', 'on funciton', 'off function'
-        }
-
-    def _init_number_variations(self):
-        self.number_variations = {
-            1: ['one', 'single', '1'],
-            2: ['two', 'couple', '2'],
-            3: ['three', '3'],
-            4: ['four', '4'],
-            5: ['five', '5'],
-            10: ['ten', '10']
-        }
-        number_words = '|'.join(item for sublist in self.number_variations.values() for item in sublist)
-        self.patterns['number'] = re.compile(
-            rf'\b(?!(?:[0-9a-fA-F]{{130}}|\d{{10}})\b)({number_words}|\d+)\b',
-            re.IGNORECASE
-        )
-
-    def initialize_augmenter(self, texts: List[str]):
-        combined_text = " ".join(texts)
-        words = combined_text.split()
-        stopwords = self.get_stopwords_from_preserved(words)
-
-        try:
-            self.augmenters = [
-                naw.SynonymAug(
-                    aug_src='wordnet',
-                    aug_p=0.3,
-                    aug_min=1,
-                    stopwords=stopwords
-                ),
-                naw.ContextualWordEmbsAug(
-                    model_path='bert-base-uncased',
-                    action="substitute",
-                    aug_p=0.3,
-                    aug_min=1,
-                    stopwords=stopwords
-                ),
-                naw.RandomWordAug(
-                    action="swap",
-                    aug_p=0.3,
-                    aug_min=1,
-                    stopwords=stopwords
-                )
-            ]
-            logging.info("Augmenters initialized successfully")
-        except Exception as e:
-            logging.error(f"Failed to initialize augmenters: {str(e)}")
-            raise
-
-    def is_preserved(self, word: str) -> bool:
-        """주어진 키워드가 보존되어야 하는 키워드인지 확인"""
-        return (
-            word in self.preserved_keywords or
-            any(pattern.match(word) for pattern in [self.patterns[key] for key in ['hex', 'from', 'to', 'timestamp']])
-    ) 
-
-
-    def get_stopwords_from_preserved(self, text: list) -> list:
-        stopwords = [word for word in text if self.is_preserved(word)]
-        return stopwords
-
-    def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2) -> Tuple[List[str], List[str]]:
-        augmented_inputs = []
-        augmented_outputs = []
-        self.initialize_augmenter(input_texts)
-
-        for idx, (input_text, output_text) in enumerate(zip(input_texts, output_texts)):
-            try:
-                for augmenter in self.augmenters:
-                    try:
-                        variations = augmenter.augment(input_text, n=num_variations)
-                        # [UNK]
-                        filtered_variations = [var for var in variations if 'UNK' not in var]
-                        for var in filtered_variations:
-                            augmented_inputs.append(var)
-                            augmented_outputs.append(output_text)
-                    except Exception as e:
-                        logging.warning(f"Augmentation failed: {str(e)}")
-                        continue
-            except Exception as e:
-                logging.error(f"Error at index {idx}: {str(e)}")
-                continue
-
-        unique_pairs = list(dict.fromkeys(zip(augmented_inputs, augmented_outputs)))
-        if unique_pairs:
-            augmented_inputs, augmented_outputs = zip(*unique_pairs)
-            return list(augmented_inputs), list(augmented_outputs)
-        return [],[]
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
