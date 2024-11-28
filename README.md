@@ -160,7 +160,7 @@ Each augmentation technique is applied sequentially, with careful preservation o
 
 The probability settings (0.3) ensure moderate augmentation while maintaining query comprehensibility and functional equivalence. All augmented outputs are validated to ensure they maintain the correct semantic mapping to their corresponding filter code.
 
-![Data Augmentation ](image.png)
+![Data Augmentation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/data_augmentation_result.png?raw=true)
 
 #### 4. Quality Control
 
