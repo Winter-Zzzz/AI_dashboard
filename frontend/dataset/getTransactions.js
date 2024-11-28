@@ -3,7 +3,7 @@ const getTransactions = async () => {
       const response = await fetch('http://localhost:8080/getAllTransactions');
       const data = await response.json();
       console.log("Received data:", data);
-  
+
       // Process raw transaction data
       const processedData = data.map(item => {
         const transactions = item.transactions.map(txHex => {
@@ -12,7 +12,7 @@ const getTransactions = async () => {
             const txBytes = new Uint8Array(
               txHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
             );
-  
+
             // Extract function name (first 18 bytes)
             let funcName = "";
             for (let i = 0; i < 18; i++) {
@@ -20,28 +20,32 @@ const getTransactions = async () => {
                 funcName += String.fromCharCode(txBytes[i]);
               }
             }
-  
+
             // Extract source public key (next 33 bytes)
             const compressedPubKey = txBytes.slice(18, 51);
             const srcPk = Array.from(compressedPubKey)
               .map(byte => byte.toString(16).padStart(2, "0"))
               .join("");
-  
+
             // Extract timestamp (next 8 bytes)
             let timestamp = 0n;
             for (let i = 0; i < 8; i++) {
               timestamp |= BigInt(txBytes[51 + i]) << BigInt(i * 8);
             }
             
-            const timestampMs = Number(timestamp);
-            if (!Number.isFinite(timestampMs)) {
+            const timestampSec = Number(timestamp);
+            if (!Number.isFinite(timestampSec)) {
               throw new Error('Invalid timestamp value');
             }
-  
+            
+            // Convert seconds to milliseconds for JavaScript Date
+            const timestampMs = timestampSec * 1000;
+
             return {
               raw_data: txHex,
               src_pk: srcPk,
-              timestamp: timestampMs,
+              timestamp: timestampSec,
+              timestampMs,
               func_name: funcName.trim()
             };
           } catch (error) {
@@ -49,13 +53,13 @@ const getTransactions = async () => {
             return null;
           }
         }).filter(tx => tx !== null);
-  
+
         return {
           pk: item.pk,
           transactions
         };
       });
-  
+
       // Generate pkData for BarChart
       const pkDataMap = new Map();
       processedData.forEach(item => {
@@ -64,40 +68,49 @@ const getTransactions = async () => {
           pkDataMap.set(shortPk, (pkDataMap.get(shortPk) || 0) + item.transactions.length);
         }
       });
-  
+
       const pkData = Array.from(pkDataMap.entries())
         .map(([pk, count]) => ({
           pk: `PK${pk}`,
           count: Math.max(1, count)
         }))
-        .sort((a, b) => a.count - b.count)
+        .sort((a, b) => b.count - a.count)
         .slice(0, 10);
-  
-      // Calculate TPS data with proper timestamp formatting
-      const now = new Date();
-      const hours = [...Array(24)].map((_, i) => {
-        const d = new Date(now);
-        d.setHours(d.getHours() - 23 + i);
-        d.setMinutes(0);
-        d.setSeconds(0);
-        d.setMilliseconds(0);
-        return d;
-      });
-  
-      const tpsData = hours.map(hour => {
+
+      // Calculate TPS data with proper timestamp range
+      const getAllTransactionDates = processedData.flatMap(item => 
+        item.transactions.map(tx => new Date(tx.timestampMs))
+      );
+
+      const oldestDate = new Date(Math.min(...getAllTransactionDates));
+      const newestDate = new Date(Math.max(...getAllTransactionDates));
+
+      // Generate hourly time points between oldest and newest dates
+      const timePoints = [];
+      let currentDate = new Date(oldestDate);
+      currentDate.setMinutes(0, 0, 0);
+
+      while (currentDate <= newestDate) {
+        timePoints.push(new Date(currentDate));
+        currentDate.setHours(currentDate.getHours() + 1);
+      }
+
+      const tpsData = timePoints.map(hour => {
         const count = processedData.reduce((acc, item) => {
           return acc + item.transactions.filter(tx => {
-            const txDate = new Date(tx.timestamp);
-            return txDate.getHours() === hour.getHours();
+            const txDate = new Date(tx.timestampMs);
+            return txDate.getHours() === hour.getHours() &&
+                  txDate.getDate() === hour.getDate() &&
+                  txDate.getMonth() === hour.getMonth();
           }).length;
         }, 0);
-  
+
         return {
-          timestamp: hour.toISOString(), // Store full ISO string
-          tps: count || 0 // Ensure non-null value
+          timestamp: hour.toISOString(),
+          tps: count || 0
         };
       });
-  
+
       // Generate time distribution
       const timeRanges = {
         '00-04': 0,
@@ -107,24 +120,24 @@ const getTransactions = async () => {
         '16-20': 0,
         '20-24': 0
       };
-  
+
       processedData.forEach(item => {
         item.transactions.forEach(tx => {
-          if (tx && tx.timestamp) {
-            const hour = new Date(tx.timestamp).getHours();
+          if (tx && tx.timestampMs) {
+            const hour = new Date(tx.timestampMs).getHours();
             const rangeStart = Math.floor(hour / 4) * 4;
             const rangeKey = `${rangeStart.toString().padStart(2, '0')}-${(rangeStart + 4).toString().padStart(2, '0')}`;
             timeRanges[rangeKey]++;
           }
         });
       });
-  
+
       const timeDistribution = Object.entries(timeRanges)
         .map(([name, value]) => ({
           name,
           value: Math.max(0, value)
         }));
-  
+
       // Generate chatData
       const chatData = processedData
         .flatMap(item => 
@@ -133,11 +146,11 @@ const getTransactions = async () => {
             .map(tx => ({
               pk: item.pk,
               func_name: tx.func_name,
-              timestamp: tx.timestamp
+              timestamp: tx.timestamp  // Keep original seconds timestamp
             }))
         )
         .sort((a, b) => b.timestamp - a.timestamp);
-  
+
       return {
         tpsData,
         pkData,
@@ -149,5 +162,5 @@ const getTransactions = async () => {
       throw error;
     }
   };
-  
+
   export default getTransactions;
