@@ -2,195 +2,257 @@ import logging
 import nlpaug.augmenter.word as naw
 from typing import List, Tuple, Set
 import nltk
+import re
+import random
+import time
+import json
+import os
+import sys
+import json
+from typing import List
 
-# NLTK 필요 데이터 다운로드
-try:
-    nltk.download('wordnet')
-    nltk.download('averaged_perceptron_tagger_eng')
-    nltk.download('omw-1.4')
-    nltk.download('punkt')
-except Exception as e:
-    logging.warning(f"NLTK 데이터 다운로드 중 경고: {str(e)}")
+# data_loader.py에서 load_training_data 함수 가져오기 
+from data_loader import load_training_data
 
 class QueryAugmenterNlpAug:
+    """입출력 텍스트를 토큰화하여 모델 학습용 데이터셋 생성"""
     def __init__(self):
+        self._download_nltk_data()
+        self._init_patterns()
+        self._init_preserved_keywords()
+        self._init_number_variations()
+
+    def _download_nltk_data(self):
+        """NLTK 데이터 패키지가 설치되어 있는지 확인하고 없으면 다운로드"""
+        packages = ['wordnet', 'averaged_perceptron_tagger', 'averaged_perceptron_tagger_eng', 'punkt']
+        for package in packages:
+            try:
+                nltk.data.find(f'{package}')
+            except LookupError:
+                nltk.download(package)
+
+    def _init_patterns(self):
+        """텍스트에서 특정 패턴을 식별하기 위한 정규 표현식 초기화"""
+        self.patterns = {
+            'hex': re.compile(r'[0-9a-fA-F]{130}'), # 130자리 16진수 값
+            'from': re.compile(r'from\s+([0-9a-fA-F]{130})'), # from [hex]
+            'to': re.compile(r'to\s+([0-9a-fA-F]{130})'), # to [hex]
+            'timestamp': re.compile(r'\b\d{10}\b'), 
+            'func_name': re.compile(r'\b(setup function|on function|off function)\b', re.IGNORECASE) 
+        }
+    
+    def _init_preserved_keywords(self):
+        """모델 처리 중 변경하지 말아야 할 키워드"""
+        self.preserved_keywords = {
+            'setup funciton', 'on funciton', 'off function', 'to', 'from'
+        }
+
+    def _init_number_variations(self):
+        """숫자를 다양한 텍스트 표현과 매칭되도록 처리함"""
+        self.number_variations = { # 숫자 변형 정의
+            1: ['one', 'single', '1'],
+            2: ['two', 'couple', '2'],
+            3: ['three', '3'],
+            4: ['four', '4'],
+            5: ['five', '5'],
+            10: ['ten', '10']
+        }
+        number_words = '|'.join(item for sublist in self.number_variations.values() for item in sublist)
+        self.patterns['number'] = re.compile(
+            rf'\b(?!(?:[0-9a-fA-F]{{130}}|\d{{10}})\b)({number_words}|\d+)\b',
+            re.IGNORECASE
+        )
+
+    def is_preserved(self, word: str) -> bool:
+        """주어진 키워드가 보존되어야 하는 키워드인지 확인"""
+        return (
+            word in self.preserved_keywords or
+            any(pattern.match(word) for pattern in [self.patterns[key] for key in ['hex', 'from', 'to', 'timestamp']])
+    ) 
+
+    def get_stopwords_from_preserved(self, text: list) -> list:
+        """정지어 리스트 추출"""
+        stopwords = [word for word in text if self.is_preserved(word)]
+        return stopwords
+
+    def initialize_augmenter(self, texts: List[str]):
+        """입력된 텍스트 리스트를 사용하여 증강기를 초기화함"""
+
+        # 텍스트 결합 - 입력된 텍스트를 하나로 결합하고 이를 단어 단위로 나눔
+        combined_text = " ".join(texts)
+        words = combined_text.split()
+
+        # 정지어 생성 
+        stopwords = self.get_stopwords_from_preserved(words)
+
         try:
-            # NlpAug 증강기 초기화 - 파라미터 조정
-            self.aug_syn = naw.SynonymAug(
-                aug_src='wordnet',
-                aug_p=0.5,  # 증가
-                aug_min=1
-            )
-            
-            self.aug_insert = naw.ContextualWordEmbsAug(
-                model_path='bert-base-uncased', 
-                action="insert",
-                aug_p=0.5,  # 추가
-                aug_min=1   # 최소 1개 변경
-            )
-            
-            self.aug_word_embs = naw.ContextualWordEmbsAug(
-                model_path='bert-base-uncased',
-                action="substitute",
-                aug_p=0.5,  # 증가
-                aug_min=1   # 최소 1개 변경
-            )
-            
-            logging.info("NlpAug 증강기 초기화 완료")
-            
+            self.augmenters = [
+                naw.SynonymAug( # WordNet을 사용해 동의어 치환 수행
+                    aug_src='wordnet',
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.ContextualWordEmbsAug( # BERT 모델을 사용해 문맥에 따라 단어 대체
+                    model_path='bert-base-uncased',
+                    action="substitute",
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.ContextualWordEmbsAug( # BERT 모델을 사용해 문맥에 따라 단어 삽입
+                    model_path='bert-base-uncased',
+                    action="insert",
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.RandomWordAug( # BERT 모델을 사용해 문맥에 따라 
+                    action="swap",
+                    aug_p=0.3,
+                    aug_min=1,
+                    stopwords=stopwords
+                )
+            ]
+            logging.info("Augmenters initialized successfully")
         except Exception as e:
-            logging.error(f"NlpAug 증강기 초기화 중 에러 발생: {str(e)}")
-            raise e
+            logging.error(f"Failed to initialize augmenters: {str(e)}")
+            raise
 
-    def _get_keywords(self, text: str) -> Set[str]:
-        """보존할 키워드 추출 (128자리 16진수 PK 처리)"""
-        keywords = set()
-        words = text.split()
+    def validate_function_keywords(self, text: str) -> bool:
+        """입력 텍스트의 function 키워드 유효성 검사"""
+        # off나 setup이 중복으로 나오는지만 체크
+        words = text.lower().split()
+        off_count = words.count('off')
+        setup_count = words.count('setup')
         
-        # 128자리 16진수 형태의 src_pk, pk 값 보존
-        for word in words:
-            if len(word) == 128 and all(c in '0123456789abcdefABCDEF' for c in word):
-                keywords.add(word)
-                
-        return keywords
+        # off나 setup이 1번 초과로 나오면 거부
+        return off_count <= 1 and setup_count <= 1
 
-    def _preserve_keywords(self, text: str, keywords: Set[str]) -> str:
-        """키워드 보존"""
-        result = text
-        words = result.split()
-        for keyword in keywords:
-            if keyword not in result and words:
-                result = result.replace(words[0], keyword, 1)
-        return result
-
-    def _check_valid_variation(self, variation: str, output_code: str) -> bool:
-        """변형된 텍스트가 유효한지 확인"""
-        # output 코드에서 src_pk와 pk 값 추출
-        src_pk_val = output_code.split("src_pk='")[1].split("'")[0] if "src_pk='" in output_code else None
-        pk_val = output_code.split("pk='")[1].split("'")[0] if "pk='" in output_code else None
-        
-        # src_pk/pk 값이 변형된 텍스트에도 존재하는지 확인
-        if src_pk_val and src_pk_val not in variation:
-            return False
-        if pk_val and pk_val not in variation:
-            return False
+    def clean_output_text(self, text: str) -> str:
+        """출력 텍스트 특수 처리"""
+        if 'TransactionFilter' in text:
+            # function 부분을 정리 (예: 'on function' -> 'on')
+            text = text.replace("'off function'", "'off'")
+            text = text.replace("'on function'", "'on'")
+            text = text.replace("'setup function'", "'setup'")
             
-        return True
+            # 메서드 체인 사이의 공백 제거
+            text = re.sub(r'\s*\.\s*', '.', text)
+            # 괄호 주변 공백 정리
+            text = re.sub(r'\(\s*', '(', text)
+            text = re.sub(r'\s*\)', ')', text)
+            return text.strip()
+        return text
+        
 
-    def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 20) -> Tuple[List[str], List[str]]:
-        """NlpAug 기반 텍스트 증강"""
+    def filter_augmented_pairs(self, inputs: List[str], outputs: List[str]) -> Tuple[List[str], List[str]]:
+        """증강된 데이터 쌍 필터링"""
+        filtered_inputs = []
+        filtered_outputs = []
+        
+        for input_text, output_text in zip(inputs, outputs):
+            # function 키워드 유효성 검사
+            if self.validate_function_keywords(input_text):
+                cleaned_output = self.clean_output_text(output_text)
+                filtered_inputs.append(input_text)
+                filtered_outputs.append(cleaned_output)
+                
+        return filtered_inputs, filtered_outputs
+    
+    def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2) -> Tuple[List[str], List[str]]:
+        """입력 텍스트 변형과 해당 변형에 맞는 출력 텍스트 생성"""
         augmented_inputs = []
         augmented_outputs = []
-        
-        # 원본 데이터 유지
-        augmented_inputs.extend(input_texts)
-        augmented_outputs.extend(output_texts)
-        
-        for idx, (input_text, output_code) in enumerate(zip(input_texts, output_texts)):
+
+        # 초기 데이터 정리 및 필터링
+        input_texts, output_texts = self.filter_augmented_pairs(input_texts, output_texts)
+        self.initialize_augmenter(input_texts)
+
+        for idx, (input_text, output_text) in enumerate(zip(input_texts, output_texts)):
             try:
-                logging.info(f"\n처리 중인 입력 텍스트: {input_text}")
-                
-                # 보존할 키워드 추출
-                keywords = self._get_keywords(input_text)
-                logging.info(f"보존할 키워드: {keywords}")
-                
-                variations = set()
-                
-                # 1. 동의어 교체로 증강
-                try:
-                    syn_texts = self.aug_syn.augment(input_text, n=num_variations)
-                    logging.info(f"동의어 교체 결과: {syn_texts}")
-                    if isinstance(syn_texts, list):
-                        for text in syn_texts:
-                            if isinstance(text, str):
-                                preserved = self._preserve_keywords(text, keywords)
-                            else:
-                                preserved = self._preserve_keywords(text[0], keywords)
-                            variations.add(preserved)
-                except Exception as e:
-                    logging.error(f"동의어 교체 중 에러: {str(e)}")
-                
-                # 2. 단어 삽입으로 증강
-                try:
-                    insert_texts = self.aug_insert.augment(input_text, n=num_variations)
-                    logging.info(f"단어 삽입 결과: {insert_texts}")
-                    if isinstance(insert_texts, list):
-                        for text in insert_texts:
-                            if isinstance(text, str):
-                                preserved = self._preserve_keywords(text, keywords)
-                            else:
-                                preserved = self._preserve_keywords(text[0], keywords)
-                            variations.add(preserved)
-                except Exception as e:
-                    logging.error(f"단어 삽입 중 에러: {str(e)}")
-                
-                # 3. BERT 기반 문맥 변경으로 증강
-                try:
-                    context_texts = self.aug_word_embs.augment(input_text, n=num_variations)
-                    logging.info(f"BERT 문맥 변경 결과: {context_texts}")
-                    if isinstance(context_texts, list):
-                        for text in context_texts:
-                            if isinstance(text, str):
-                                preserved = self._preserve_keywords(text, keywords)
-                            else:
-                                preserved = self._preserve_keywords(text[0], keywords)
-                            variations.add(preserved)
-                except Exception as e:
-                    logging.error(f"BERT 문맥 변경 중 에러: {str(e)}")
-                
-                logging.info(f"생성된 모든 변형: {variations}")
-                
-                # 변형 결과 검증 및 추가
-                valid_variations = set()
-                for variation in variations:
-                    if (variation != input_text and  # 원본과 동일하지 않고
-                        self._check_valid_variation(variation, output_code)):  # 유효한 변형인 경우
-                        valid_variations.add(variation)
-                
-                logging.info(f"유효한 변형 수: {len(valid_variations)}")
-                if valid_variations:
-                    logging.info(f"유효한 변형들: {valid_variations}")
-                    augmented_inputs.extend(valid_variations)
-                    augmented_outputs.extend([output_code] * len(valid_variations))
-                
-                if idx % 10 == 0:
-                    logging.info(f"Processed {idx+1}/{len(input_texts)} items")
-                    logging.info(f"Current variations for item {idx}: {len(variations)}")
-                
+                for augmenter in self.augmenters:
+                    try:
+                        variations = augmenter.augment(input_text, n=num_variations)
+
+                        for var in variations:
+                            if 'UNK' not in var and self.validate_function_keywords(var):
+                                augmented_inputs.append(var)
+                                augmented_outputs.append(output_text)
+                    except Exception as e:
+                        logging.warning(f"Augmentation failed: {str(e)}")
+                        continue
             except Exception as e:
-                logging.error(f"증강 중 에러 발생 (idx={idx}): {str(e)}")
+                logging.error(f"Error at index {idx}: {str(e)}")
                 continue
-        
-        # 중복 제거 # !!!! 중복을 제거하여 최종 결과를 고유한 쌍으로 만듦
+
         unique_pairs = list(dict.fromkeys(zip(augmented_inputs, augmented_outputs)))
-        augmented_inputs, augmented_outputs = zip(*unique_pairs)
-        
-        logging.info(f"\n=== 최종 증강 결과 ===")
-        logging.info(f"원본 데이터 크기: {len(input_texts)}")
-        logging.info(f"증강 후 크기: {len(augmented_inputs)}")
-        if len(augmented_inputs) > len(input_texts):
-            logging.info(f"증강 예시:")
-            for i, text in enumerate(list(set(augmented_inputs) - set(input_texts))[:3], 1):
-                logging.info(f"예시 {i}: {text}")
-        else:
-            logging.warning("증강 데이터가 생성되지 않았거나 모두 필터링되었습니다.")
-        
-        return list(augmented_inputs), list(augmented_outputs)
+        if unique_pairs:
+            augmented_inputs, augmented_outputs = zip(*unique_pairs)
+            return list(augmented_inputs), list(augmented_outputs)
+        return [],[]
+    
+def save_augmented_data(augmented_inputs: List[str], augmented_outputs: List[str], file_path: str):
+    """증강된 데이터를 augmented_dataset.json으로 저장"""
+
+    # 데이터셋 구조 생성
+    dataset = [{'input': inp, 'output': out} for inp, out in zip(augmented_inputs, augmented_outputs)]
+    data = {
+        "dataset": dataset,
+    }
+
+    # JSON 파일로 저장
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    print(f"Augmented data saved to {file_path}")
+
+    # 통계 출력
+    print("\n=== 증강 통계 ===")
+    print(f"증강된 데이터 수: {len(augmented_inputs)}")
+    print(f"저장 위치: {os.path.abspath(file_path)}")
+    
+    return data
 
 if __name__ == "__main__":
-    # 테스트 코드
     logging.basicConfig(level=logging.INFO)
-    
+
+    # 프로젝트 루트 경로 설정 및 sys.path에 추가
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
+    sys.path.append(project_root)
+
+    # 데이터셋 경로 설정
+    raw_data_path = os.path.join(project_root, 'ai', 'data', 'raw', 'generated_dataset.json')
+    augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented', 'augmented_dataset.json')
+
+    # 원본 데이터 로드
+    try:
+        input_texts, output_texts = load_training_data(raw_data_path)
+
+        # 데이터 검증
+        if not isinstance(input_texts, list) or not isinstance(output_texts, list):
+            raise ValueError("Training data must be lists.")
+
+        if any(not isinstance(text, str) for text in input_texts):
+            raise ValueError("All input data must be strings.")
+
+        if any(not isinstance(text, str) for text in output_texts):
+            raise ValueError("All output data must be strings.")
+        
+    except Exception as e:
+        logging.error(f"Error loading or validating training data: {e}")
+        sys.exit(1)  # 에러 발생 시 종료
+
+    logging.info(f"Loaded {len(input_texts)} input-output pairs for augmentation.")
+
     augmenter = QueryAugmenterNlpAug()
-    test_inputs = [
-        "Query 5 latest device responses from 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef to 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-        "Show all status updates from 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-    ]
-    test_outputs = [
-        "const src_pk='1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';const pk='1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';const result=data.filter(item=>item.pk===pk).flatMap(item=>item.transactions).filter(tx=>tx.src_pk===src_pk).sort((a,b)=>parseInt(b.timestamp)-parseInt(a.timestamp)).slice(0,5);console.log(result);",
-        "const src_pk='1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';const pk='1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';const result=data.filter(item=>item.pk===pk).flatMap(item=>item.transactions).filter(tx=>tx.src_pk===src_pk).sort((a,b)=>parseInt(b.timestamp)-parseInt(a.timestamp)).slice(0,5);console.log(result);"
-    ]
-    
-    augmented_inputs, augmented_outputs = augmenter.augment(test_inputs, test_outputs)
-    logging.info(f"증강된 입력 텍스트: {augmented_inputs}")
-    logging.info(f"증강된 출력 코드: {augmented_outputs}")
+
+    augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts)
+
+    # 증강된 데이터를 저장
+    try:
+        save_augmented_data(augmented_inputs, augmented_outputs, augmented_data_path)
+        logging.info(f"Augmented data saved to {augmented_data_path}")
+    except Exception as e:
+        logging.error(f"Error saving augmented data: {e}")
+        sys.exit(1)
