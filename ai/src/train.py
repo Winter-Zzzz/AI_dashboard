@@ -80,8 +80,6 @@ def show_training_example(model, batch, tokenizer, device, config):
         attention_mask=batch['attention_mask'][:1].to(device),
         max_length=config.MAX_GEN_LENGTH,
         num_beams=config.NUM_BEAMS,
-        temperature=config.TEMPERATURE,
-        top_p=config.TOP_P,
         early_stopping=True,
 )
         
@@ -97,6 +95,7 @@ def show_training_example(model, batch, tokenizer, device, config):
 
 def evaluate_model(model, test_dataloader, tokenizer, device):
     """학습 완료 후 전체 테스트 데이터에 대한 평가를 수행하는 함수"""
+    config=ModelConfig()
     model.eval()
     total_loss = 0
     all_examples = []
@@ -118,8 +117,6 @@ def evaluate_model(model, test_dataloader, tokenizer, device):
                 attention_mask=batch['attention_mask'].to(device),
                 max_length=config.MAX_GEN_LENGTH,
                 num_beams=config.NUM_BEAMS,
-                temperature=config.TEMPERATURE,
-                top_p=config.TOP_P,
                 early_stopping=True,
             )
             
@@ -241,6 +238,12 @@ def train_model():
             '.sort()',
             '.',
             ')',
+            "by_func_name('off')",
+            "by_func_name('on')", 
+            "by_func_name('setup')",
+            "print(TransactionFilter(data).by_func_name",
+            "print(TransactionFilter(data).by_src_pk",
+            "print(TransactionFilter(data).by_timestamp",
         ]
     }
 
@@ -248,69 +251,116 @@ def train_model():
     model.resize_token_embeddings(len(tokenizer))
     model = model.to(device)
 
-    # 데이터셋을 train과 test로 분할 (90:10)
+    # Split dataset into train and validation sets (80:20)
+    
     full_dataset = QueryDataset(input_texts, output_texts, tokenizer, config.MAX_LENGTH)
-    train_size = int(0.9 * len(full_dataset))
-    test_size = len(full_dataset) - train_size
-    train_dataset, test_dataset = random_split(full_dataset, [train_size, test_size])
+    total_size = len(full_dataset)
+    train_size = int(0.8 * total_size)
+    val_size = total_size - train_size  # This ensures the sizes sum to the total
 
-    train_dataloader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=config.BATCH_SIZE, shuffle=False)
+    train_dataset, val_dataset = random_split(
+        full_dataset, 
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+
+    train_dataloader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True)
     
     optimizer = AdamW(model.parameters(), 
-                 lr=config.LEARNING_RATE,
-                 weight_decay=config.WEIGHT_DECAY)
+                     lr=config.LEARNING_RATE,
+                     weight_decay=config.WEIGHT_DECAY, 
+                     eps=1e-8, 
+                     betas=(0.9, 0.999))
     
+    # 워밍업이 포함된 코사인 스케줄러로 변경
     num_training_steps = len(train_dataloader) * config.NUM_EPOCHS
-    num_warmup_steps = int(num_training_steps * config.WARM_UP_RATIO)
-    scheduler = get_linear_schedule_with_warmup(
+    num_warmup_steps = int(num_training_steps * 0.1)
+    
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
-        num_warmup_steps=num_warmup_steps,
-        num_training_steps=num_training_steps
+        max_lr=config.LEARNING_RATE,
+        epochs=config.NUM_EPOCHS,
+        steps_per_epoch=len(train_dataloader),
+        pct_start=0.1,
+        anneal_strategy='cos'
     )
+    
     patience = config.PATIENCE
     no_improve = 0
     best_loss = float('inf')
+    accumulation_steps = 4
 
     print("🚀 Starting training...")
     for epoch in range(config.NUM_EPOCHS):
         model.train()
-        total_loss = 0
+        total_train_loss = 0
         
         progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}")
+        optimizer.zero_grad()
+
         for i, batch in enumerate(progress_bar):
-            optimizer.zero_grad()
+            with torch.cuda.amp.autocast():
+                output = model(
+                    input_ids=batch['input_ids'].to(device),
+                    attention_mask=batch['attention_mask'].to(device), 
+                    labels=batch['labels'].to(device)
+                )
             
-            output = model(
-                input_ids=batch['input_ids'].to(device),
-                attention_mask=batch['attention_mask'].to(device), 
-                labels=batch['labels'].to(device)
-            )
-            
-            loss = output.loss
+            loss = output.loss / accumulation_steps
             loss.backward()
-            # loss.backward() 다음에 추가
+
+            if (i + 1) % accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+            
+            total_train_loss += loss.item() * accumulation_steps
+            progress_bar.set_postfix({
+                'loss': f'{loss.item() * accumulation_steps:.4f}',
+                'lr': f'{scheduler.get_last_lr()[0]:.2e}'
+            })
+            
+            if (i + 1) % 50 == 0:
+                show_training_example(model, batch, tokenizer, device, config)
+
+        # Handle last batch if needed
+        if (i + 1) % accumulation_steps != 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
             optimizer.step()
             scheduler.step()
-            total_loss += loss.item()
-            
-            progress_bar.set_postfix({'loss': f'{loss.item():.4f}'})
-            
-            # 100배치마다 예시 출력
-            if (i + 1) % 100 == 0:
-                show_training_example(model, batch, tokenizer, device, config)
+            optimizer.zero_grad()
 
-        avg_train_loss = total_loss / len(train_dataloader)
+        avg_train_loss = total_train_loss / len(train_dataloader)
+        
+        # Validation
+        model.eval()
+        total_val_loss = 0
+        with torch.no_grad():
+            for batch in val_dataloader:
+                with torch.cuda.amp.autocast():
+                    output = model(
+                        input_ids=batch['input_ids'].to(device),
+                        attention_mask=batch['attention_mask'].to(device),
+                        labels=batch['labels'].to(device)
+                    )
+                total_val_loss += output.loss.item()
+        
+        avg_val_loss = total_val_loss / len(val_dataloader)
+        
         print(f"\nEpoch {epoch+1}")
         print(f"Average Training Loss: {avg_train_loss:.4f}")
-
-        improved = tracker.update(epoch + 1, avg_train_loss)
+        print(f"Average Validation Loss: {avg_val_loss:.4f}")
+        
+        improved = tracker.update(epoch + 1, avg_val_loss)
+        
         if improved:
             print(f"✨ New best loss achieved!")
             model.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
             tokenizer.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
             no_improve = 0
+            best_loss = avg_val_loss
         else:
             no_improve += 1
             print(f"No improvement for {no_improve} epochs")
@@ -318,19 +368,15 @@ def train_model():
                 print("🛑 Early stopping triggered!")
                 break
 
-    # 학습 완료 후 전체 평가 수행
-    print("\n📊 Performing final evaluation...")
-    final_loss, examples = evaluate_model(model, test_dataloader, tokenizer, device, config)
-    print(final_loss, examples)
-    
     return model, tokenizer
 
+
 if __name__ == "__main__":
-    os.makedirs('logs', exist_ok=True)
-    print("🚀 Starting model training...")
-    model, tokenizer = train_model()
-    
-    if model is not None and tokenizer is not None:
-        print("✅ Training completed successfully!")
-    else:
-        print("❌ Training failed!")
+   os.makedirs('logs', exist_ok=True)
+   print("🚀 Starting model training...")
+   model, tokenizer = train_model()
+   
+   if model is not None and tokenizer is not None:
+       print("✅ Training completed successfully!")
+   else:
+       print("❌ Training failed!")

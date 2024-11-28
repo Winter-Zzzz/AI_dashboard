@@ -153,101 +153,55 @@ Configuration:
     - "Get earliest data after timestamp" → "After timestamp get earliest data"
 
 Each augmentation technique is applied sequentially, with careful preservation of critical elements like:
-    - Hexadecimal public keys
-    - Function types (setup/on/off function)
-    - Timestamps
-    - Directional indicators (to/from)
+- Hexadecimal public keys
+- Function types (setup/on/off function)
+- Timestamps
+- Directional indicators (to/from)
 
 The probability settings (0.3) ensure moderate augmentation while maintaining query comprehensibility and functional equivalence. All augmented outputs are validated to ensure they maintain the correct semantic mapping to their corresponding filter code.
 
+![Data Augmentation ](image.png)
+
 #### 4. Quality Control
-The system implements a comprehensive quality control process to ensure the integrity and usefulness of augmented data:
 
-##### Function Type Validation
-- Enforces strict rules for function-related content:
-  - Only one function type allowed per query (setup/on/off)
-  - Validates correct format using regex pattern: `\b(off|on|setup)\s+function\b`
-  - Prevents duplicate function type words in a single query
-  - Example of valid: "Get setup function data"
-  - Example of invalid: "Get setup on function data"
+The system ensures data quality through three main steps:
 
-##### Text Cleaning and Normalization
-1. Basic Text Cleaning:
+##### Input Validation
+- Only one function type (setup/on/off) allowed per query
+- Function keywords must follow pattern: `(off|on|setup) function`
+- Examples:
+  - Valid: "Get setup function data"
+  - Invalid: "Get setup on function data"
+
+##### Text Cleaning
+1. Output Text Processing:
+   - Converts function references: "on function" → "on" in by_func_name calls
+   - Removes extra spaces in method chains
+   - Example: "TransactionFilter(data).by_func_name('on').get_result()"
+
+2. Input Text Cleaning:
    - Removes excessive whitespace
-   - Standardizes spacing around special characters
-   - Trims leading and trailing spaces
+   - Preserves critical keywords (function names, hex values, timestamps)
 
-2. Function Type Standardization:
-   - Converts function references to standardized format
-   - Transforms: "setup function" → "by_func_name('setup')"
-   - Handles variations: "off function", "on function"
-
-3. TransactionFilter Syntax Optimization:
-   - Removes unnecessary spaces around method chains
-   - Standardizes spacing around parentheses
-   - Example: "TransactionFilter(data) . by_pk ( )" → "TransactionFilter(data).by_pk()"
-
-##### Filtering Process
-The augmentation results undergo multiple validation steps:
-
-1. Pre-augmentation Validation:
-   - Verifies input/output data types are correct (lists of strings)
-   - Checks for presence of required fields
-   - Validates data structure integrity
-
-2. During Augmentation Filtering:
-   - Removes results containing 'UNK' tokens
-   - Ensures function type validity
-   - Maintains preserved keyword integrity
-
-3. Post-augmentation Cleanup:
-   - Eliminates duplicate input-output pairs
-   - Verifies format consistency
-   - Ensures all preserved components remain intact
-
-##### Data Consistency Checks
-1. Structure Validation:
-   - Verifies JSON format compliance
-   - Checks for required fields in each entry
-   - Validates data type consistency
-
-2. Content Validation:
-   - Ensures public keys maintain 130-character length
-   - Verifies timestamp format (10-digit numbers)
-   - Checks preservation of critical keywords
-
-##### Output Generation
-1. Final Validation:
-   - Performs final verification of augmented pairs
-   - Ensures proper cleaning and formatting
-   - Validates semantic consistency
-
-2. Statistics Generation:
-   - Records number of successfully augmented pairs
-   - Tracks augmentation success rate
-   - Documents filtering statistics
-
-3. Storage:
-   - Saves validated data in structured JSON format
-   - Maintains clear input-output mapping
-   - Includes metadata about augmentation process
+##### Data Validation
+- Filters out invalid augmentations (containing 'UNK' tokens)
+- Removes duplicate input-output pairs
+- Verifies complete TransactionFilter syntax
+- Checks hex values maintain 130-character length
 
 This multi-layered quality control process ensures that the augmented dataset maintains high standards of quality and usefulness for training purposes while preserving the essential characteristics of the original queries.
 
-#### Model Training and Fine-tuning
-The model architecture is based on Text-to-Text Transfer Transformer (T5), fine-tuned for the query-to-code generation task with the following specifications:
+### Model Training and Fine-tuning
+Our model architecture is based on the T5 (Text-to-Text Transfer Transformer), specifically configured for the task of translating natural language queries into transaction filter code. The training process incorporates the following specifications:
 
-1. Model Configuration
+1. **Model Configuration**
+   - Base Model: T5-base
+   - Maximum Sequence Length: 512 tokens
+   - Maximum Generation Length: 512 tokens
+   - Training Device: GPU with CUDA support (CPU fallback available)
 
-    - Base Model: T5-base
-    - Max Sequence Length: 128 tokens
-    - Training Device: GPU (CUDA) if available, CPU otherwise
-    - Learning Rate: 2e-4
-    - Batch Size: 4
-    - Weight Decay: 0.05
-    - Number of Epochs: 20
-    - Special Tokens: Added domain-specific tokens for code generation
-
+2. **Token Processing**
+    - Special Tokens
         ```python
         [
             'print(TransactionFilter(data)',
@@ -262,37 +216,105 @@ The model architecture is based on Text-to-Text Transfer Transformer (T5), fine-
             '.sort(reverse=True)',
             '.sort()',
             '.',
-            ')',
-            '<HEX_ADDRESS>',
-            '<TIMESTAMP>'
+            ')'
         ]
         ```
-2. Generation Parameters:
-    - Number of Beams: 10
-    - Temperature: 0.7
-    - Top P: 0.9
-    - Maximum Generation Length: 128 tokens
-
-3. Training Process:
-    - Early Stopping: Implemented with patience=5
-    - Optimizer: AdamW
-    - Loss Function: Cross-entropy loss
-    - Model Checkpointing: Saves best model based on validation loss
-    - Input Format: Natural language queries with special tokens
-    - Output Format: Python code using `TransactionFilter` class with special tokens
-    - Gradient Clipping: 0.5
-    - Warm Up Ratio: 0.1
-
-4. Token Processing:
     - Token Embedding Resizing: Accomodates additional special tokens
-    - Gradient Updates: Per batch with zero_grad()
-    - Attention Mask: Handles variable length sequences
-    - Prefix Space Addition: Enhanced tokenization for special tokens 
+    - Prefix Space Addition: Enhanced tokenization for speical tokens
+    - Attention Masking: Handles variable length sequences
+
+3. **Training Parameters**
+   - Learning Rate: 1e-4
+   - Batch Size: 4
+   - Weight Decay: 0.01
+   - Number of Epochs: 20
+   - Early Stopping Patience: 5
+   - Gradient Clipping: 0.5
+   - Warm-up Ratio: 0.1
+
+4. **Generation Settings**
+   - Beam Search Size: 10
+   - Early Stopping: Enabled
+
+5. **Training Process**
+   - Data Split: 90% training, 10% validation
+   - Optimizer: AdamW with linear warmup scheduler
+   - Loss Function: Cross-entropy loss
+   - Gradient Updates: Per batch with zero_grad()
+   - Checkpointing: Saves best model based on validation loss
 
 ## Evaluation
+The evaluation framework consists of multiple components to assess model performance:
 
-tbd ...
+1. **Training Metrics**
+    - Loss Tracking: Average training and validation loss per epoch
+    - Model Convergence: Monitoring loss improvement over time
+    - Example Generation: Sample outputs every 50 batches for quality assessment
+
+2. **Performance Monitoring**
+    - Training Progress Visualization
+    - Real-time Loss Tracking
+    - Automatic Model Checkpointing
+    - Training Status Logging
+
+3. **Quality Assessment**
+    - Syntax Validation: Ensuring correct TransactionFilter code generation
+    - Semantic Accuracy: Verifying query intent preservation
+    -Example Generation: Regular validation of model outputs
+    - Comprehensive Final Evaluation: Detailed analysis of model performance
+
+The evaluation results are stored in both JSON format for detailed analysis and text format for human readability, allowing for thorough assessment of the model's capabilities and limitations.
 
 ## Conclusion
 
-tbd ...
+Our AI_Dashboard project successfully demonstrates an effective approach to bridging the gap between natural language interaction and blockchain data querying. Through careful implementation of dataset generation, augmentation, and model training, we have created a robust system that addresses key challenges in blockchain data accessibility.
+
+### Technical Achievements
+
+1. **Dataset Development**
+   - Successfully generated a synthetic dataset of 500 query-code pairs
+   - Implemented sophisticated data augmentation techniques using NLP
+   - Maintained semantic integrity through careful preservation rules
+   - Achieved diverse query variations while ensuring code accuracy
+
+2. **Model Implementation**
+   - Successfully fine-tuned T5-base for specialized code generation
+   - Implemented custom tokenization with domain-specific tokens
+   - Achieved efficient training with early stopping mechanism
+   - Developed robust evaluation frameworks for performance assessment
+
+3. **Quality Control**
+   - Implemented multi-layered validation systems
+   - Maintained high standards in data quality
+   - Ensured semantic consistency in augmented data
+   - Developed comprehensive evaluation metrics
+
+### System Benefits
+
+1. **Accessibility**
+   - Eliminated technical barriers for non-technical users
+   - Enabled natural language interaction with blockchain data
+   - Simplified complex query construction
+   - Reduced dependency on technical expertise
+
+2. **Data Integrity**
+   - Maintained blockchain data immutability
+   - Implemented direct gRPC connection to Hyperledger Fabric
+   - Eliminated intermediary-related corruption risks
+   - Ensured secure local processing
+
+### Future Work
+
+1. **Model Enhancement**
+   - Expand the training dataset with more complex query patterns
+   - Implement additional augmentation techniques
+   - Explore advanced model architectures
+   - Optimize performance for larger-scale deployments
+
+2. **System Development**
+   - Enhance error handling mechanisms
+   - Implement additional blockchain platform support
+   - Develop more sophisticated monitoring tools
+   - Expand query capabilities
+
+Our implementation successfully demonstrates the viability of using natural language processing for blockchain data querying, providing a foundation for future development in making blockchain technology more accessible to non-technical users while maintaining the security and integrity of the underlying data.

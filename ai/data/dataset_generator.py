@@ -74,6 +74,7 @@ class TransactionFilterDatasetGenerator:
             filter_chain += f".by_src_pk('{src_pk}')"
         if any(func in input_text for func in self.functions):
             func_name = next(func for func in self.functions if func in input_text)
+            func_name = func_name.replace(' function', '')
             filter_chain += f".by_func_name('{func_name}')"
         if "after " in input_text or "before " in input_text:
             timestamp = input_text.split("after ")[-1].split()[0] if "after " in input_text else input_text.split("before ")[-1].split()[0]
