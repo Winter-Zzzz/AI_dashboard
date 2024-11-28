@@ -5,6 +5,7 @@ from tqdm import tqdm
 import logging
 from datetime import datetime
 import shutil
+
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader, random_split
@@ -368,10 +369,12 @@ def train_model():
                 print("🛑 Early stopping triggered!")
                 break
 
+
     return model, tokenizer
 
 
 if __name__ == "__main__":
+
    os.makedirs('logs', exist_ok=True)
    print("🚀 Starting model training...")
    model, tokenizer = train_model()
@@ -380,3 +383,4 @@ if __name__ == "__main__":
        print("✅ Training completed successfully!")
    else:
        print("❌ Training failed!")
+

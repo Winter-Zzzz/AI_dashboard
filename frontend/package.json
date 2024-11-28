@@ -6,7 +6,7 @@
   "scripts": {
     "start": "concurrently \"npm run webpack-dev\" \"npm run electron-dev\"",
     "webpack-dev": "webpack serve --mode development",
-    "electron-dev": "wait-on http://localhost:8080 && electron .",
+    "electron-dev": "wait-on http://localhost:4000 && electron .",
     "build": "webpack --mode production"
   },
   "keywords": [],

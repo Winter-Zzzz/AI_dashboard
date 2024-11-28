@@ -10,6 +10,7 @@ class ModelConfig:
     BATCH_SIZE = 4
     LEARNING_RATE = 1e-4
     WEIGHT_DECAY = 0.01
+
     NUM_EPOCHS = 20
     PATIENCE = 5
     

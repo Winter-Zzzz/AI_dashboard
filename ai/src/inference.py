@@ -4,6 +4,7 @@ import json
 import torch
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 from utils.filter_data import TransactionFilter
+
 from pathlib import Path
 from config.model_config import ModelConfig
 
@@ -14,6 +15,7 @@ sys.path.append(PROJECT_ROOT)
 # GPU 사용 가능 여부 확인
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {DEVICE}")
+
 
 def clean_generated_text(text: str) -> str:
     # 특수 토큰 제거
@@ -64,8 +66,10 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
         )
     
     outputs = outputs.cpu()
+
     generated_code = tokenizer.decode(outputs[0])
     return clean_generated_text(generated_code)
+
 
 def execute_code(code: str, data: dict):
     """Python 코드 실행 함수"""
@@ -115,6 +119,7 @@ def main():
     config = ModelConfig()  # CodeGeneratorConfig 대신 ModelConfig 사용
     model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
     
+
     # test_dir = create_test_directory()
     # json_path = os.path.join(os.path.dirname(__file__), 'test', 'transaction_test.json')
     # data = load_json_data(json_path)
@@ -150,13 +155,16 @@ def main():
         model.resize_token_embeddings(len(tokenizer))
         
         model = model.to(DEVICE)  # DEVICE 대신 device 사용 (상단에서 정의된 것)
+
         print(f"학습된 모델 로딩 완료! (Device: {DEVICE})")
     except Exception as e:
         print(f"모델 로딩 중 에러 발생: {str(e)}")
         return
 
     model.eval()
+
     data = 0
+
     interactive_session(model, tokenizer, data)
 
 if __name__ == "__main__":
