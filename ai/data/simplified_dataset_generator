@@ -17,35 +17,32 @@ class TransactionFilterDatasetGenerator:
     
     def generate_input(self):
         command = random.choice(self.commands)
-        count = None
-        sort_order = None
-
+        
+        # 조건들 기본적으로 설정
         conditions = []
 
-        if random.choice([True, False]):  
-            address = self.random_pk()
-            conditions.append(f"to {address}")
-
-        if random.choice([True, False]):  
-            address = self.random_pk()
-            conditions.append(f"from {address}")
-
-        if random.choice([True, False]): 
-            func = random.choice(self.functions)
+        # 조건이 없을 경우 None 값으로 대체하고 조건을 생성
+        to_address = self.random_pk() if random.choice([True, False]) else None
+        from_address = self.random_pk() if random.choice([True, False]) else None
+        func = random.choice(self.functions) if random.choice([True, False]) else None
+        timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"]) if random.choice([True, False]) else None
+        sort_order = random.choice(self.sort_orders) if random.choice([True, False]) else None
+        
+        # 조건이 None이 아니면 추가
+        if to_address:
+            conditions.append(f"to {to_address}")
+        if from_address:
+            conditions.append(f"from {from_address}")
+        if func:
             conditions.append(f"{func}")
-
-        if random.choice([True, False]):  
-            timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"])
+        if timestamp:
             conditions.append(timestamp)
-
-        if random.choice([True, False]):
-            count = random.randint(1, 10)
-
-        if random.choice([True, False]):
-            sort_order = random.choice(self.sort_orders)
-
+        if sort_order:
+            conditions.append(sort_order)
+        
+        # 조건이 하나도 없으면, 하나 이상을 강제로 추가 (to, from, timestamp, func, sort_order 중에서)
         if not conditions:
-            fallback_filter = random.choice(['to', 'from', 'func', 'timestamp'])
+            fallback_filter = random.choice(['to', 'from', 'func', 'timestamp', 'sort'])
             if fallback_filter == 'to':
                 address = self.random_pk()
                 conditions.append(f"to {address}")
@@ -58,39 +55,63 @@ class TransactionFilterDatasetGenerator:
             elif fallback_filter == 'timestamp':
                 timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"])
                 conditions.append(timestamp)
+            elif fallback_filter == 'sort':
+                conditions.append(random.choice(self.sort_orders))
+        
+        # count는 1에서 10 사이의 숫자, 없으면 None
+        count = random.choice([None, random.randint(1, 10)])
 
+        # 조건들을 조합하여 반환
         condition = " ".join(conditions).strip()
-            
-        return f"{command} {count if count else ''} {sort_order if sort_order else ''} {condition}".strip()
+        return f"{command} {count if count is not None else ''} {condition}".strip()
     
     def generate_output(self, input_text):
         filter_chain = ""
         
+        # 입력 텍스트에서 pk 값 추출
         if "to " in input_text:
             pk = input_text.split("to ")[-1].split()[0]
             filter_chain += f".by_pk('{pk}')"
+        else:
+            filter_chain += ".by_pk(-1)"
+        
         if "from " in input_text:
             src_pk = input_text.split("from ")[-1].split()[0]
             filter_chain += f".by_src_pk('{src_pk}')"
+        else:
+            filter_chain += ".by_src_pk(-1)"
+        
         if any(func in input_text for func in self.functions):
             func_name = next(func for func in self.functions if func in input_text)
             func_name = func_name.replace(' function', '')
             filter_chain += f".by_func_name('{func_name}')"
+        else:
+            filter_chain += ".by_func_name(-1)"
+        
         if "after " in input_text or "before " in input_text:
             timestamp = input_text.split("after ")[-1].split()[0] if "after " in input_text else input_text.split("before ")[-1].split()[0]
             filter_chain += f".by_timestamp('{timestamp}')"
-        if "earliest" in input_text:
-            filter_chain += ".sort()"
-        elif "recent" in input_text:
-            filter_chain += ".sort(reverse=True)"
-        
-        if re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text):
-            count = int(re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text)[0])
         else:
-            filter_chain += ".get_result()"
+            filter_chain += ".by_timestamp(-1)"
         
-        return f"print(TransactionFilter(data){filter_chain}.get_result(){count})"
-    
+        # "earliest"를 0으로, "recent"를 1로 처리
+        if "earliest" in input_text:
+            filter_chain += ".sort(0)"
+        elif "recent" in input_text:
+            filter_chain += ".sort(1)"
+        else:
+            filter_chain += ".sort(0)"
+        
+        # count 추출, 없으면 None
+        count_match = re.findall(r'\b([1-9]|10)\b', input_text)
+        count = count_match[0] if count_match else None
+        
+        # count가 없으면 get_result(-1) 호출
+        if count is None:
+            return f"filter{filter_chain}.get_result(-1))"
+        else:
+            return f"filter{filter_chain}.get_result({count}))"
+
     def generate_dataset(self, n=10):
         dataset = []
         for _ in range(n):
@@ -103,17 +124,17 @@ class TransactionFilterDatasetGenerator:
         return dataset
 
 
+# Dataset 생성
 generator = TransactionFilterDatasetGenerator()
 dataset = generator.generate_dataset(1000)
-generated_dataset = {
-    "dataset": dataset
-}
 
-
+# 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-file_path = os.path.join(project_root,'ai', 'data', 'raw', 'generated_dataset.json')
+file_path = os.path.join(project_root, 'ai', 'data', 'raw', 'simplified_generated_dataset.json')
 os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+# JSON 파일로 저장
 with open(file_path, 'w') as json_file:
-    json.dump(generated_dataset, json_file, indent=4)
+    json.dump({"dataset": dataset}, json_file, indent=4)
 
 print(f"JSON 파일이 {file_path}에 저장되었습니다.")

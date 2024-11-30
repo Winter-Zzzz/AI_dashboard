@@ -21,51 +21,46 @@ class TransactionFilter:
         self._filtered_data = self.transactions
         return self
 
-    def by_pk(self, pk_value: str) -> 'TransactionFilter':
+    def by_pk(self, pk_value: Optional[str] = None) -> 'TransactionFilter':
         """pk로 필터링"""
-        self._filtered_data = [
-            transaction for transaction in self._filtered_data 
-            if transaction['pk'] == pk_value
-        ]
+        if pk_value is not None:
+            self._filtered_data = [
+                transaction for transaction in self._filtered_data 
+                if transaction['pk'] == pk_value
+            ]
         return self
 
-    def by_src_pk(self, src_pk_value: str) -> 'TransactionFilter':
+    def by_src_pk(self, src_pk_value: Optional[str] = None) -> 'TransactionFilter':
         """src_pk로 필터링"""
-        self._filtered_data = [
-            transaction for transaction in self._filtered_data
-            for txn in transaction['transactions']
-            if txn['src_pk'] == src_pk_value
-        ]
+        if src_pk_value is not None:
+            self._filtered_data = [
+                transaction for transaction in self._filtered_data
+                for txn in transaction['transactions']
+                if txn['src_pk'] == src_pk_value
+            ]
         return self
     
-    def by_func_name(self, func_name: str) -> 'TransactionFilter':
+    def by_func_name(self, func_name: Optional[str] = None) -> 'TransactionFilter':
         """func_name으로 필터링"""
-        self._filtered_data = [
-            transaction for transaction in self._filtered_data
-            for txn in transaction['transactions']
-            if txn['func_name'] == func_name
-        ]
+        if func_name is not None:
+            self._filtered_data = [
+                transaction for transaction in self._filtered_data
+                for txn in transaction['transactions']
+                if txn['func_name'] == func_name
+            ]
         return self
-
-    def by_timestamp(self, timestamp_value: str, compare_func: Callable = lambda x, y: x > y) -> 'TransactionFilter':
+    def by_timestamp(self, timestamp_value: Optional[str] = None, compare_func: Callable = lambda x, y: x > y) -> 'TransactionFilter':
         """timestamp로 필터링. 비교 함수를 커스텀할 수 있음"""
-        timestamp_datetime = datetime.fromtimestamp(int(timestamp_value))
-        self._filtered_data = [
-            transaction for transaction in self._filtered_data
-            for txn in transaction['transactions']
-            if compare_func(
-                datetime.fromtimestamp(int(txn['timestamp'])),
-                timestamp_datetime
-            )
-        ]
-        return self
-
-    def custom_filter(self, filter_func: Callable[[Dict], bool]) -> 'TransactionFilter':
-        """커스텀 필터 함수 적용"""
-        self._filtered_data = [
-            transaction for transaction in self._filtered_data
-            if filter_func(transaction)
-        ]
+        if timestamp_value is not None:
+            timestamp_datetime = datetime.fromtimestamp(int(timestamp_value))
+            self._filtered_data = [
+                transaction for transaction in self._filtered_data
+                for txn in transaction['transactions']
+                if compare_func(
+                    datetime.fromtimestamp(int(txn['timestamp'])),
+                    timestamp_datetime
+                )
+            ]
         return self
 
     def sort(self, 
@@ -74,15 +69,14 @@ class TransactionFilter:
         """결과 정렬"""
         self._filtered_data = sorted(self._filtered_data, key=key_func, reverse=reverse)
         return self
-
-    def count(self) -> int:
-        """현재 필터링된 결과의 개수 반환"""
-        return len(self._filtered_data)
+    
+    def get_result(self, count: Optional[int] = None) -> List[Dict]:
+        """필터링된 결과 반환"""
+        if count is not None:
+            return self._filtered_data[:count]  # 원하는 개수만큼 결과 반환
+        return self._filtered_data
 
     def get_result(self) -> List[Dict]:
         """필터링된 결과 반환"""
         return self._filtered_data
 
-    def get_first(self) -> Optional[Dict]:
-        """첫 번째 결과 반환"""
-        return self._filtered_data[0] if self._filtered_data else None
