@@ -10,13 +10,13 @@ class ModelConfig:
     BATCH_SIZE = 8
     LEARNING_RATE = 5e-5
     WEIGHT_DECAY = 0.01
-    NUM_EPOCHS = 15
+    NUM_EPOCHS = 30
     PATIENCE = 7
     
     # 생성 파라미터
     NUM_BEAMS = 5
-    LENGTH_PENALTY=0.6
-    NO_REPEAT_NGRAM_SIZE=2
+    LENGTH_PENALTY=1.0
+    NO_REPEAT_NGRAM_SIZE=0
     
     # 최적화 파라미터
     GRADIENT_CLIP = 1.0

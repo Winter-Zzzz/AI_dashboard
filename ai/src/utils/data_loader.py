@@ -4,6 +4,7 @@ import logging
 import os
 from .preprocessing import preprocess_input_text, preprocess_output_text
 
+
 def load_training_data(file_path: str) -> Tuple[List[str], List[str]]:
     """
     학습 데이터를 로드하는 함수

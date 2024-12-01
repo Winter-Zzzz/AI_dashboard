@@ -13,6 +13,7 @@ from torch.amp import GradScaler, autocast
 import json
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 sys.path.append(project_root)
 
 os.makedirs(os.path.join(project_root, 'logs'), exist_ok=True)
@@ -39,7 +40,7 @@ class QueryDataset(Dataset):
         self.max_length = max_length
         self.patterns = {
             'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
-            'timestamp': re.compile(r'\b\d{10}\b'),
+            'time': re.compile(r'\b\d{10}\b'),
             # 'func_name': re.compile(r'\b(setup|on|off)\s*\w*\s*function/?\b', re.IGNORECASE)
         }
 
@@ -83,27 +84,29 @@ class QueryDataset(Dataset):
 
     def process_text(self, text: str) -> str:
         """텍스트 전처리 - 해시값과 Timestamp 처리"""
-        words = text.split()
-        result = []
-        
-        for word in words:
-            if self.patterns['hex'].match(word):
-                # 해시값 발견 시 ('해시값') 형식으로 변환
-                result.append(f"<hex>{word}</hex>")
-            elif self.patterns['timestamp'].match(word):
-                # Timestamp 발견 시 ('Timestamp') 형식으로 변환
-                result.append(f"<time>{word}</time>")
-            else:
-                # 다른 단어는 그대로 추가
-                result.append(word)
-        
-        return ' '.join(result)
-
+        for pattern_name, pattern in self.patterns.items():
+            matches = pattern.finditer(text)
+            for match in matches:
+                start, end = match.span()
+                text = (
+                    text[:start] + 
+                    f"<{pattern_name}>{match.group()}</{pattern_name}>" +
+                    text[end:]
+                )
+        return text
 
 class TrainingTracker:
     def __init__(self, log_dir):
         self.log_dir = log_dir
-        os.makedirs(self.log_dir, exist_ok=True)
+        self.status_file = os.path.join(self.log_dir, 'training_status.json')
+
+        if os.path.exists(self.status_file):
+            with open(self.status_file, 'r') as f:
+                status = json.load(f)
+                self.best_loss = status.get('best_loss', float('inf'))
+        else:
+            self.best_loss = float('inf')
+            
         self.training_history = {
             'epochs': [],
             'train_loss': [],
@@ -179,27 +182,25 @@ def train_model():
 
     # 1. 토크나이저 설정
     # 토크나이저 먼저 생성
-    tokenizer = T5Tokenizer.from_pretrained(config.MODEL_NAME)
-    
-    # 그 다음에 설정 변경
     tokenizer = T5Tokenizer.from_pretrained(
         config.MODEL_NAME,
         model_max_length=config.MAX_LENGTH,
-        padding_side='right',  # 오른쪽으로 패딩
-        truncation_side='right',  # 오른쪽에서 자르기
+        padding_side='right',
+        truncation_side='right'
     )
-
     tokenizer.pad_token = tokenizer.eos_token
-    model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
-
-    # 2. 특수 토큰
     special_tokens = {
         'additional_special_tokens': [
             '<hex>','</hex>','<time>','</time>'
         ]
     }
-    tokenizer.add_special_tokens(special_tokens)
-    print(tokenizer.all_special_tokens)
+    # 특수 토큰 추가
+    num_added_tokens = tokenizer.add_special_tokens(special_tokens)
+    print(f"Added {num_added_tokens} special tokens")
+    print(f"Special tokens: {tokenizer.all_special_tokens}")
+
+    # 모델 초기화 및 임베딩 크기 조정
+    model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
     model.resize_token_embeddings(len(tokenizer))
     model = model.to(device)
     

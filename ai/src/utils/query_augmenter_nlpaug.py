@@ -241,7 +241,7 @@ if __name__ == "__main__":
 
     augmenter = QueryAugmenterNlpAug()
 
-    augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts, 1, 256)
+    augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts, 1, 512)
 
     # 증강된 데이터를 저장
     try:
