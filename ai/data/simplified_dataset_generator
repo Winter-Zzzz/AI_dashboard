@@ -6,8 +6,9 @@ import re
 class TransactionFilterDatasetGenerator:
     def __init__(self):
         self.commands = ['Fetch', 'Get', 'Query', 'Load', 'Read', 'Pull', 'Show', 'List']
-        self.sort_orders = ['recent', 'earliest']
+        self.orders = ['recent', 'earliest']
         self.functions = ['setup function', 'on function', 'off function']
+        self.transaction_words = ['', 'transaction', 'transactions']
     
     def random_pk(self):
         return ''.join(random.choices('abcdef0123456789', k=130))
@@ -17,6 +18,8 @@ class TransactionFilterDatasetGenerator:
     
     def generate_input(self):
         command = random.choice(self.commands)
+        transaction_word = random.choice(self.transaction_words)  # 추가된 부분
+        
         
         # 조건들 기본적으로 설정
         conditions = []
@@ -26,7 +29,7 @@ class TransactionFilterDatasetGenerator:
         from_address = self.random_pk() if random.choice([True, False]) else None
         func = random.choice(self.functions) if random.choice([True, False]) else None
         timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"]) if random.choice([True, False]) else None
-        sort_order = random.choice(self.sort_orders) if random.choice([True, False]) else None
+        order = random.choice(self.orders) if random.choice([True, False]) else None
         
         # 조건이 None이 아니면 추가
         if to_address:
@@ -37,12 +40,12 @@ class TransactionFilterDatasetGenerator:
             conditions.append(f"{func}")
         if timestamp:
             conditions.append(timestamp)
-        if sort_order:
-            conditions.append(sort_order)
+        if order:
+            conditions.append(order)
         
-        # 조건이 하나도 없으면, 하나 이상을 강제로 추가 (to, from, timestamp, func, sort_order 중에서)
+        # 조건이 하나도 없으면, 하나 이상을 강제로 추가 (to, from, timestamp, func, order 중에서)
         if not conditions:
-            fallback_filter = random.choice(['to', 'from', 'func', 'timestamp', 'sort'])
+            fallback_filter = random.choice(['to', 'from', 'func', 'timestamp', 'by_order'])
             if fallback_filter == 'to':
                 address = self.random_pk()
                 conditions.append(f"to {address}")
@@ -55,15 +58,21 @@ class TransactionFilterDatasetGenerator:
             elif fallback_filter == 'timestamp':
                 timestamp = random.choice([f"after {self.random_timestamp()}", f"before {self.random_timestamp()}"])
                 conditions.append(timestamp)
-            elif fallback_filter == 'sort':
-                conditions.append(random.choice(self.sort_orders))
+            elif fallback_filter == 'order':
+                conditions.append(random.choice(self.orders))
         
         # count는 1에서 10 사이의 숫자, 없으면 None
         count = random.choice([None, random.randint(1, 10)])
 
         # 조건들을 조합하여 반환
         condition = " ".join(conditions).strip()
-        return f"{command} {count if count is not None else ''} {condition}".strip()
+        parts = [command]
+        if count is not None:
+            parts.append(str(count))
+        if transaction_word:  # count 다음에 transaction_word 추가
+            parts.append(transaction_word)
+        parts.append(condition)
+        return " ".join(parts).strip()
     
     def generate_output(self, input_text):
         filter_chain = ""
@@ -96,21 +105,21 @@ class TransactionFilterDatasetGenerator:
         
         # "earliest"를 0으로, "recent"를 1로 처리
         if "earliest" in input_text:
-            filter_chain += ".sort(0)"
+            filter_chain += ".by_order(0)"
         elif "recent" in input_text:
-            filter_chain += ".sort(1)"
+            filter_chain += ".by_order(1)"
         else:
-            filter_chain += ".sort(0)"
+            filter_chain += ".by_order(0)"
         
         # count 추출, 없으면 None
-        count_match = re.findall(r'\b([1-9]|10)\b', input_text)
+        input_without_transaction = input_text.replace('transaction', '').replace('transactions', '')
+        count_match = re.findall(r'\b([1-9]|10)\b', input_without_transaction)
         count = count_match[0] if count_match else None
-        
         # count가 없으면 get_result(-1) 호출
         if count is None:
-            return f"filter{filter_chain}.get_result(-1))"
+            return f"txn{filter_chain}.get_result(-1)"
         else:
-            return f"filter{filter_chain}.get_result({count}))"
+            return f"txn{filter_chain}.get_result({count})"
 
     def generate_dataset(self, n=10):
         dataset = []

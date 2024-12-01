@@ -89,7 +89,7 @@ class TransactionFilterDatasetGenerator:
         else:
             filter_chain += ".get_result()"
         
-        return f"print(TransactionFilter(data){filter_chain}.get_result(){count})"
+        return f"print(TransactionFilter(data){filter_chain}.get_result(){count}"
     
     def generate_dataset(self, n=10):
         dataset = []

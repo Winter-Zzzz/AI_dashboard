@@ -34,7 +34,7 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
         input_text, 
         return_tensors="pt", 
         max_length=config.MAX_LENGTH,
-        padding='max_length'
+        padding='max_length',
         truncation=True
     )
     
@@ -57,17 +57,35 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
     return generated_code
 
 
-# def execute_code(code: str, data: dict):
-#     """Python 코드 실행 함수"""
-#     try:
-#         print("\n실행 결과:")
-#         exec_globals = {
-#             "data": data,
-#             "TransactionFilter": TransactionFilter  # TransactionFilter 클래스를 실행 환경에 추가
-#         }
-#         exec(code, exec_globals)
-#     except Exception as e:
-#         print(f"코드 실행 중 에러 발생: {str(e)}")
+def execute_code(code: str, data: dict):
+    """Python 코드 실행 함수"""
+    try:
+        print("\n실행 결과:")
+        exec_globals = {
+            "data": data,
+            "TransactionFilter": TransactionFilter,  # TransactionFilter 클래스를 실행 환경에 추가
+            "result": None
+        }
+        exec(code, exec_globals)
+        return exec_globals.get("result")
+    except Exception as e:
+        print(f"코드 실행 중 에러 발생: {str(e)}")
+        return None
+
+def transform_code(code: str):
+    """<pad> </s> 제거"""
+    code = code.replace("<pad>", "")
+    code = code.replace("</s>", "")
+    # Remove extra whitespace
+    code = " ".join(code.split())
+
+    # dataset_generator  부터 실수함  고쳐야함 !!!
+    if code.endswith("))"):
+        code = code[:-1]
+
+    if code.startswith("filter."):
+        code = f"filter = TransactionFilter(data).reset()\nresult = {code}\nprint(result)"
+    return code
 
 def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenizer, data: dict = None):
     """대화형 세션 실행"""
@@ -90,13 +108,13 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
             
         try:
             print("\n생성 중...")
-            generated_code = generate_code(user_input, model, tokenizer)
+            generated_code = transform_code(generate_code(user_input, model, tokenizer))
             print("\n생성된 코드:")
             print("```python")
             print(generated_code)
             print("```\n")
 
-            # execute_code(generated_code, data)
+            execute_code(generated_code, data)
         except Exception as e:
             print(f"\n에러 발생: {str(e)}")
 
@@ -106,7 +124,7 @@ def main():
     model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
     
     # 테스트 데이터 로드
-    json_path = os.path.join(PROJECT_ROOT, 'test', 'transaction_test.json')
+    json_path = os.path.join(PROJECT_ROOT, 'src', 'test', 'transaction_test.json')
     data = load_json_data(json_path)
     
     try:
