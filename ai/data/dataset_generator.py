@@ -86,11 +86,10 @@ class TransactionFilterDatasetGenerator:
         
         if re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text):
             count = int(re.findall(r'\b(?![0-9a-fA-F]{130}\b)(?!\d{10}\b)\d+\b', input_text)[0])
-            filter_chain += f".get_result()[:{count}]"
         else:
             filter_chain += ".get_result()"
         
-        return f"print(TransactionFilter(data){filter_chain})"
+        return f"print(TransactionFilter(data){filter_chain}.get_result(){count}"
     
     def generate_dataset(self, n=10):
         dataset = []
@@ -105,7 +104,7 @@ class TransactionFilterDatasetGenerator:
 
 
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(500)
+dataset = generator.generate_dataset(1000)
 generated_dataset = {
     "dataset": dataset
 }

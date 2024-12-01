@@ -10,6 +10,7 @@ import os
 import sys
 import json
 from typing import List
+from tqdm import tqdm
 
 # data_loader.py에서 load_training_data 함수 가져오기 
 from data_loader import load_training_data
@@ -44,7 +45,7 @@ class QueryAugmenterNlpAug:
     def _init_preserved_keywords(self):
         """모델 처리 중 변경하지 말아야 할 키워드"""
         self.preserved_keywords = {
-            'setup funciton', 'on funciton', 'off function', 'to', 'from'
+            'setup function', 'on function', 'off function', 'to', 'from'
         }
 
     def _init_number_variations(self):
@@ -89,21 +90,15 @@ class QueryAugmenterNlpAug:
             self.augmenters = [
                 naw.SynonymAug( # WordNet을 사용해 동의어 치환 수행
                     aug_src='wordnet',
-                    aug_p=0.3,
+                    aug_p=0.2,
                     aug_min=1,
                     stopwords=stopwords
                 ),
                 naw.ContextualWordEmbsAug( # BERT 모델을 사용해 문맥에 따라 단어 대체
                     model_path='bert-base-uncased',
+                    device='cuda',
                     action="substitute",
-                    aug_p=0.3,
-                    aug_min=1,
-                    stopwords=stopwords
-                ),
-                naw.ContextualWordEmbsAug( # BERT 모델을 사용해 문맥에 따라 단어 삽입
-                    model_path='bert-base-uncased',
-                    action="insert",
-                    aug_p=0.3,
+                    aug_p=0.2,
                     aug_min=1,
                     stopwords=stopwords
                 ),
@@ -130,22 +125,14 @@ class QueryAugmenterNlpAug:
         return off_count <= 1 and setup_count <= 1
 
     def clean_output_text(self, text: str) -> str:
-        """출력 텍스트 특수 처리"""
-        if 'TransactionFilter' in text:
-            # function 부분을 정리 (예: 'on function' -> 'on')
-            text = text.replace("'off function'", "'off'")
-            text = text.replace("'on function'", "'on'")
-            text = text.replace("'setup function'", "'setup'")
-            
-            # 메서드 체인 사이의 공백 제거
-            text = re.sub(r'\s*\.\s*', '.', text)
-            # 괄호 주변 공백 정리
-            text = re.sub(r'\(\s*', '(', text)
-            text = re.sub(r'\s*\)', ')', text)
-            return text.strip()
-        return text
+        """증강 데이터에 대한 기본적인 텍스트 정제"""
+        # 메서드 체인 사이의 공백 제거
+        text = re.sub(r'\s*\.\s*', '.', text)
+        # 괄호 주변 공백 정리
+        text = re.sub(r'\(\s*', '(', text)
+        text = re.sub(r'\s*\)', ')', text)
+        return text.strip()
         
-
     def filter_augmented_pairs(self, inputs: List[str], outputs: List[str]) -> Tuple[List[str], List[str]]:
         """증강된 데이터 쌍 필터링"""
         filtered_inputs = []
@@ -160,7 +147,7 @@ class QueryAugmenterNlpAug:
                 
         return filtered_inputs, filtered_outputs
     
-    def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2) -> Tuple[List[str], List[str]]:
+    def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2, batch_size: int=32) -> Tuple[List[str], List[str]]:
         """입력 텍스트 변형과 해당 변형에 맞는 출력 텍스트 생성"""
         augmented_inputs = []
         augmented_outputs = []
@@ -169,23 +156,30 @@ class QueryAugmenterNlpAug:
         input_texts, output_texts = self.filter_augmented_pairs(input_texts, output_texts)
         self.initialize_augmenter(input_texts)
 
-        for idx, (input_text, output_text) in enumerate(zip(input_texts, output_texts)):
-            try:
-                for augmenter in self.augmenters:
-                    try:
-                        variations = augmenter.augment(input_text, n=num_variations)
+        for i in range(0, len(input_texts), batch_size):
+            batch_inputs = input_texts[i:i + batch_size]
+            batch_outputs = output_texts[i:i + batch_size]
 
-                        for var in variations:
-                            if 'UNK' not in var and self.validate_function_keywords(var):
-                                augmented_inputs.append(var)
-                                augmented_outputs.append(output_text)
-                    except Exception as e:
-                        logging.warning(f"Augmentation failed: {str(e)}")
-                        continue
-            except Exception as e:
-                logging.error(f"Error at index {idx}: {str(e)}")
-                continue
+            for idx, (input_text, output_text) in enumerate(tqdm(zip(batch_inputs, batch_outputs), 
+                                                                 total=len(batch_inputs),
+                                                                 desc=f"Batch {i//batch_size + 1}/{len(input_texts)//batch_size + 1}")):
+                try:
+                    for augmenter in self.augmenters:
+                        try:
+                            variations = augmenter.augment(input_text, n=num_variations)
 
+                            for var in variations:
+                                if 'UNK' not in var and self.validate_function_keywords(var):
+                                    augmented_inputs.append(var)
+                                    augmented_outputs.append(output_text)
+                        except Exception as e:
+                            logging.warning(f"Augmentation failed: {str(e)}")
+                            continue
+                    logging.info(f"Processing batch {idx+1}/{len(input_texts)}")
+                except Exception as e:
+                    logging.error(f"Error at index {idx}: {str(e)}")
+                    continue
+                
         unique_pairs = list(dict.fromkeys(zip(augmented_inputs, augmented_outputs)))
         if unique_pairs:
             augmented_inputs, augmented_outputs = zip(*unique_pairs)
@@ -222,8 +216,8 @@ if __name__ == "__main__":
     sys.path.append(project_root)
 
     # 데이터셋 경로 설정
-    raw_data_path = os.path.join(project_root, 'ai', 'data', 'raw', 'generated_dataset.json')
-    augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented', 'augmented_dataset.json')
+    raw_data_path = os.path.join(project_root, 'ai', 'data', 'raw', 'simplified_generated_dataset.json')
+    augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented', 'simplified_augmented_dataset.json')
 
     # 원본 데이터 로드
     try:
@@ -247,7 +241,7 @@ if __name__ == "__main__":
 
     augmenter = QueryAugmenterNlpAug()
 
-    augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts)
+    augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts, 1, 512)
 
     # 증강된 데이터를 저장
     try:

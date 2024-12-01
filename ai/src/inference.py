@@ -16,28 +16,16 @@ sys.path.append(PROJECT_ROOT)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {DEVICE}")
 
-
-def clean_generated_text(text: str) -> str:
-    # 특수 토큰 제거
-    special_tokens = ["<pad>", "</s>"]
-    for token in special_tokens:
-        text = text.replace(token, "")
-    
-    # 불필요한 공백 제거
-    text = " ".join(text.split())
-    
-    # 괄호, 점 주변의 공백 제거
-    text = text.replace(" (", "(")
-    text = text.replace(" )", ")")
-    text = text.replace(" .", ".")
-    text = text.replace(" [", "[")
-    text = text.replace(" ]", "]")
-    text = text.replace(" :", ":")
-    text = text.replace(" ,", ",")
-    
-    # 앞뒤 공백 제거
-    text = text.strip()
-    return text
+def load_json_data(file_path):
+    """JSON 파일에서 데이터 로드"""
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        print(f"데이터 로드 완료: {file_path}")
+        return data
+    except Exception as e:
+        print(f"데이터 로드 중 에러 발생: {str(e)}")
+        return None
 
 def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer: T5Tokenizer) -> str:
     config = ModelConfig()
@@ -45,8 +33,8 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
     inputs = tokenizer(
         input_text, 
         return_tensors="pt", 
-        max_length=config.MAX_LENGTH,  # MAX_INPUT_LENGTH 대신 MAX_LENGTH 사용
-        padding=True, 
+        max_length=config.MAX_LENGTH,
+        padding='max_length',
         truncation=True
     )
     
@@ -58,17 +46,15 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
             attention_mask=inputs['attention_mask'],
             max_length=config.MAX_GEN_LENGTH,
             num_beams=config.NUM_BEAMS,
-            temperature=config.TEMPERATURE,
-            top_p=config.TOP_P,
-            do_sample=True,
-            no_repeat_ngram_size=2,
-            early_stopping=True
+            length_penalty=config.LENGTH_PENALTY,
+            no_repeat_ngram_size=config.NO_REPEAT_NGRAM_SIZE,
+            early_stopping=config.EARLY_STOPPING
         )
     
     outputs = outputs.cpu()
 
     generated_code = tokenizer.decode(outputs[0])
-    return clean_generated_text(generated_code)
+    return generated_code
 
 
 def execute_code(code: str, data: dict):
@@ -77,11 +63,29 @@ def execute_code(code: str, data: dict):
         print("\n실행 결과:")
         exec_globals = {
             "data": data,
-            "TransactionFilter": TransactionFilter  # TransactionFilter 클래스를 실행 환경에 추가
+            "TransactionFilter": TransactionFilter,  # TransactionFilter 클래스를 실행 환경에 추가
+            "result": None
         }
         exec(code, exec_globals)
+        return exec_globals.get("result")
     except Exception as e:
         print(f"코드 실행 중 에러 발생: {str(e)}")
+        return None
+
+def transform_code(code: str):
+    """<pad> </s> 제거"""
+    code = code.replace("<pad>", "")
+    code = code.replace("</s>", "")
+    # Remove extra whitespace
+    code = " ".join(code.split())
+
+    # dataset_generator  부터 실수함  고쳐야함 !!!
+    if code.endswith("))"):
+        code = code[:-1]
+
+    if code.startswith("filter."):
+        code = f"filter = TransactionFilter(data).reset()\nresult = {code}\nprint(result)"
+    return code
 
 def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenizer, data: dict = None):
     """대화형 세션 실행"""
@@ -104,7 +108,7 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
             
         try:
             print("\n생성 중...")
-            generated_code = generate_code(user_input, model, tokenizer)
+            generated_code = transform_code(generate_code(user_input, model, tokenizer))
             print("\n생성된 코드:")
             print("```python")
             print(generated_code)
@@ -119,31 +123,26 @@ def main():
     config = ModelConfig()  # CodeGeneratorConfig 대신 ModelConfig 사용
     model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
     
-
-    # test_dir = create_test_directory()
-    # json_path = os.path.join(os.path.dirname(__file__), 'test', 'transaction_test.json')
-    # data = load_json_data(json_path)
+    # 테스트 데이터 로드
+    json_path = os.path.join(PROJECT_ROOT, 'src', 'test', 'transaction_test.json')
+    data = load_json_data(json_path)
     
     try:
         print("학습된 모델을 로딩하는 중...")
         # 토크나이저 먼저 초기화
-        tokenizer = T5Tokenizer.from_pretrained(model_path, legacy=False)
-        tokenizer.add_prefix_space = True
+        tokenizer = T5Tokenizer.from_pretrained(
+            model_path,
+            model_max_length=config.MAX_LENGTH,
+            padding_side='right',
+            truncatino_side='right',
+            legacy=False)
+        
+        tokenizer.pad_token = tokenizer.eos_token
         
         # 특수 토큰 추가 - train.py와 동일한 토큰들 사용
         special_tokens = {
             'additional_special_tokens': [
-                # 파이썬 기본 문법
-                'def', 'class', 'return', 'import', 'from', 'print',
-                # TransactionFilter 관련
-                'TransactionFilter', 'by_pk', 'by_src_pk', 'by_func_name',
-                'by_timestamp', 'sort', 'get_result',
-                # 구분자
-                '(', ')', '[', ']', '{', '}', '.', ',', ':', '"', "'",
-                # 연산자
-                '=', '==', '>', '<', '>=', '<=',
-                # 자주 사용되는 키워드
-                'data', 'reverse', 'True', 'False', 'None'
+                '<hex>', '</hex>', '<time>', '</time>'
             ]
         }
         tokenizer.add_special_tokens(special_tokens)
@@ -157,15 +156,12 @@ def main():
         model = model.to(DEVICE)  # DEVICE 대신 device 사용 (상단에서 정의된 것)
 
         print(f"학습된 모델 로딩 완료! (Device: {DEVICE})")
+
+        interactive_session(model, tokenizer, data)
+
     except Exception as e:
         print(f"모델 로딩 중 에러 발생: {str(e)}")
         return
-
-    model.eval()
-
-    data = 0
-
-    interactive_session(model, tokenizer, data)
 
 if __name__ == "__main__":
     main()

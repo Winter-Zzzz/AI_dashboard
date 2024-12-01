@@ -2,6 +2,8 @@ import json
 from typing import Tuple, List
 import logging
 import os
+from preprocessing import preprocess_input_text, preprocess_output_text
+
 
 def load_training_data(file_path: str) -> Tuple[List[str], List[str]]:
     """
@@ -41,8 +43,11 @@ def load_training_data(file_path: str) -> Tuple[List[str], List[str]]:
                     logging.warning(f"빈 input/output 항목 발견 (index {idx}): {item}")
                     continue
 
-                input_texts.append(input_text)
-                output_texts.append(output_text)
+                processed_input = preprocess_input_text(input_text)
+                processed_output = preprocess_output_text(output_text)
+
+                input_texts.append(processed_input)
+                output_texts.append(processed_output)
 
             except Exception as e:
                 logging.error(f"데이터 처리 중 에러 발생 (index {idx}): {str(e)}")
