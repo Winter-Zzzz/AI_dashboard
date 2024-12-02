@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import { RotateCw } from 'lucide-react';
 import Sidebar from './components/Sidebar';
@@ -20,7 +20,7 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [resetKey, setResetKey] = useState(0);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
       setIsLoading(true)
       setResetKey(prev => prev + 1);
       try {
@@ -40,16 +40,23 @@ const App = () => {
       } finally {
         setIsLoading(false);
       }
-    };
+    }, []);
 
     useEffect(() => {
       fetchData();
-    }, []);
+    }, [fetchData]);
 
 
-  const handleMenuClick = (menuName) => {
+  const handleMenuClick = useCallback((menuName) => {
     setActiveMenu(menuName);
-  };
+  }, []);
+
+  const memoizedData = useMemo(() => ({
+    tpsData: transactionData.tpsData,
+    pkData: transactionData.pkData,
+    timeDistribution: transactionData.timeDistribution,
+    chatData: transactionData.chatData
+  }), [transactionData]);
 
   return (
     <div style= {{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
@@ -192,9 +199,11 @@ const App = () => {
   ); 
 };
 
+const MemoizedApp = React.memo(App);
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <MemoizedApp />
   </React.StrictMode>
 );

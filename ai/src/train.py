@@ -325,8 +325,8 @@ def train_model():
                     )
                     
                     val_examples.append({
-                        'input': tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False),
-                        'target': tokenizer.decode(batch['labels'][0], skip_special_tokens=False),
+                        'input': QueryDataset.clean_text(tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False)),
+                        'target': QueryDataset.clean_text(tokenizer.decode(batch['labels'][0], skip_special_tokens=False)),
                         'output': QueryDataset.clean_text(tokenizer.decode(generated[0], skip_special_tokens=False))
                     })
         
