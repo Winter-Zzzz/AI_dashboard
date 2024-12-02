@@ -139,17 +139,17 @@ const getTransactions = async () => {
         }));
 
       // Generate chatData
-      const chatData = processedData
-        .flatMap(item => 
-          item.transactions
-            .filter(tx => tx && tx.timestamp)
-            .map(tx => ({
-              pk: item.pk,
-              func_name: tx.func_name,
-              timestamp: tx.timestamp  // Keep original seconds timestamp
-            }))
-        )
-        .sort((a, b) => b.timestamp - a.timestamp);
+      const chatData = processedData.Map(item => ({
+        pk: item.pk,
+        transactions: item.transactions.map(tx => ({
+          raw_data: tx.raw_data,
+          src_pk: tx.src_pk,
+          timestamp: tx.timestamp.toString(),
+          func_name: tx.func_name
+        }))
+      })
+
+      );
 
       return {
         tpsData,

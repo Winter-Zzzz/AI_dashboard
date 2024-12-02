@@ -9,9 +9,16 @@ const ChatBox = ({ data }) => {
 
   const { dataset } = useMemo(() => {
     if (!data?.chatData) {
-      return { dataset: [] };
+      return { transactions: [] };
     }
-    return { dataset: data.chatData };
+
+    const allTransactions = data.chatData.flatMap(item =>
+      item.transactions.map(tx => ({
+        ...tx,
+        pk: item.pk
+      }))
+     );
+    return { transactions: allTransactions };
   }, [data]);
 
   console.log("Received Data", dataset)
@@ -81,26 +88,30 @@ const ChatBox = ({ data }) => {
       justifyContent: 'center',
       opacity: isLoading ? 0.7 : 1,
     },
-    codeBlock: {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      backgroundColor: '#2d2d2d',
-      color: '#e6e6e6',
-      padding: '12px',
-      borderRadius: '4px',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-all'
-    },
-    resultBlock: {
+    transactionBlock: {
       marginTop: '8px',
       fontFamily: 'monospace',
-      fontSize: '12px',
-      backgroundColor: '#1a1a1a',
+      fonstSize: '12px',
+      backgroundColor:'#1a1a1a',
       color: '#e6e6e6',
       padding: '12px',
       borderRadius: '4px',
       maxHeight: '300px',
       overflowY: 'auto',
+      overflowX: 'hidden',
+    },
+    transactionItem: {
+      marginBottom: '8px',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    },
+    transactionField: {
+      display: 'block',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      marginBottom: '4px',
     }
   };
 
@@ -119,11 +130,12 @@ const ChatBox = ({ data }) => {
   
     try {
       const queryText = encodeURIComponent(inputText);
-      const encodedDataset = encodeURIComponent(JSON.stringify(dataset));
-      const response = await fetch(`http://localhost:8000/api/query-transactions?query_text=${queryText}&dataset=${encodedDataset}`, {
+      const encodedDataset = encodeURIComponent(JSON.stringify(transactions));
+      const response = await fetch(`http://localhost:8000/api/query-transactions?query_text=${queryText}&dataset=${encodedTransactions}`, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
       });
       
@@ -132,14 +144,13 @@ const ChatBox = ({ data }) => {
       }
   
       const responseData = await response.json();
-      console.log('서버 응답:', responseData); // 디버깅용
+      console.log('서버 응답:', responseData); 
   
       if (responseData.status === 'success' && responseData.data) {
         const responseMessage = {
           id: Date.now() + 1,
-          text: `트랜잭션 조회 결과:`,
-          result: JSON.stringify(responseData.data.transactions, null, 2),
-          // code: responseData.data.generated_code,
+          text: '트랜잭션 조회 결과:',
+          transactions: responseData.data,
           isUser: false
         };
         setMessages(prevMessages => [...prevMessages, responseMessage]);
@@ -164,6 +175,30 @@ const ChatBox = ({ data }) => {
     }
   };
 
+  const formatTimeStmap = (timestamp) => {
+    return new Date(parseInt(timestamp) * 1000).toLocaleString('ko-KR');
+  };
+
+  const renderTransaction = (transaction) => (
+    <div key={transaction.raw_data} style={styles.transactionItem}>
+      <span style={styles.transactionField}>
+        function: {transaction.func_name}
+      </span>
+      <span style={styles.transactionField}>
+        public key: {transaction.pk}
+      </span>
+      <span style={styles.trarnsactionField}>
+        src_pk: {transaction.src_pk}
+      </span>
+      <span style={styles.transactionField}>
+        time: {formatTimestamp(transaction.timestamp)}
+      </span>
+      <span style={styles.transactionField}>
+        raw data: {transaction.raw_data}
+      </span>
+    </div>
+  );
+
   return (
     <div style={styles.container}>
       <div style={styles.messageArea}>
@@ -183,12 +218,9 @@ const ChatBox = ({ data }) => {
               }}
             >
               <div>{message.text}</div>
-              {message.code && (
-                  <div style={styles.codeBlock}>{message.code}</div>
-              )}
-              {message.result && (
-                <div style={styles.resultBlock}>
-                  {message.result}
+              {message.transactions && (
+                <div style={styles.transactionBlock}>
+                  {message.transactions.map(renderTransaction)}
                 </div>
               )}
             </div>
