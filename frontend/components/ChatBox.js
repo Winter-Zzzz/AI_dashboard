@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CHART_DIMENSIONS } from './chartDimensions';
 import { Send } from 'lucide-react';
 
-const ChatBox = () => {
+const ChatBox = ({ data }) => {
   const [messages, setMessages] = useState([]); 
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const { dataset } = useMemo(() => {
+    if (!data?.chatData) {
+      return { dataset: [] };
+    }
+    return { dataset: data.chatData };
+  }, [data]);
+
+  console.log("Received Data", dataset)
 
   const styles = {
     container: {
@@ -99,56 +108,49 @@ const ChatBox = () => {
     e.preventDefault();
     if (!inputText.trim() || isLoading) return;
     setIsLoading(true);
-
-    // Add user message
+  
     const userMessage = {
-        id: Date.now(),
-        text: inputText, 
-        isUser: true 
+      id: Date.now(),
+      text: inputText, 
+      isUser: true 
     };
     setMessages(prevMessages => [...prevMessages, userMessage]);
     setInputText('');
-
-    try{
+  
+    try {
       const queryText = encodeURIComponent(inputText);
-      const response = await fetch(`http://localhost:8080/api/query-transactions?query_text=${queryText}&dataset=transactions`, {
+      const encodedDataset = encodeURIComponent(JSON.stringify(dataset));
+      const response = await fetch(`http://localhost:8000/api/query-transactions?query_text=${queryText}&dataset=${encodedDataset}`, {
         method: 'GET',
-        headrs: {
-          'Accept' : 'application/json'
+        headers: {
+          'Accept': 'application/json'
         }
       });
       
       if (!response.ok) {
-        let errorMessage = '서버 오류가 발생했습니다.';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorMessage;
-        } catch (e) {
-          console.error('Error parsing error response:', e);
-        }
-        throw new Error(errorMessage);
+        throw new Error('서버 오류가 발생했습니다.');
       }
-
-      let data;
-      try {
-        data = await response.json();
-      } catch (e) {
-        console.error('Error parsing response:', e);
-        throw new Error('응답 데이터 처리 중 오류가 발생했습니다.');
+  
+      const responseData = await response.json();
+      console.log('서버 응답:', responseData); // 디버깅용
+  
+      if (responseData.status === 'success' && responseData.data) {
+        const responseMessage = {
+          id: Date.now() + 1,
+          text: `트랜잭션 조회 결과:`,
+          result: JSON.stringify(responseData.data.transactions, null, 2),
+          // code: responseData.data.generated_code,
+          isUser: false
+        };
+        setMessages(prevMessages => [...prevMessages, responseMessage]);
+      } else {
+        const noDataMessage = {
+          id: Date.now() + 1,
+          text: '검색 결과가 없습니다. 다른 검색어로 시도해보세요.',
+          isUser: false
+        };
+        setMessages(prevMessages => [...prevMessages, noDataMessage]);
       }
-
-      if (!data || (!data.generated_code && !data.transactions)) {
-        throw new Error('서버로부터 올바른 응답을 받지 못했습니다.');
-      }
-
-      const responseMessage = {
-        id: Date.now() + 1,
-        text: '트랜잭션 조회 결과:',
-        result: data.transactions ? JSON.stringify(data.transactions, null, 2) : '해당하는 트랜잭션을 찾을 수 없습니다.',
-        isUser: false
-      };
-
-      setMessages(prevMessages => [...prevMessages, responseMessage]);
     } catch (error) {
       const errorMessage = {
         id: Date.now() + 1,
@@ -181,7 +183,7 @@ const ChatBox = () => {
               }}
             >
               <div>{message.text}</div>
-              {message.Code && (
+              {message.code && (
                   <div style={styles.codeBlock}>{message.code}</div>
               )}
               {message.result && (
