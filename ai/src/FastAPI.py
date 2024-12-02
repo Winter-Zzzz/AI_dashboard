@@ -101,11 +101,11 @@ async def query_transactions(query_text: str, dataset: str):
         return {
             "status": "success",
             "data": {
-                "transactions": query_text,
+                "transactions": result,
                 "generated_code": transformed,
-                "result": result
+                "query_text": query_text  # 원본 쿼리도 포함
             }
-        }
+          }   
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
