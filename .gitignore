@@ -18,11 +18,3 @@ logs/
 
 # Node.js 종속성 무시
 node_modules/
-
-# 모델 파일
-*.h5
-*.pt
-*.ckpt
-*.bin
-best_model/
-model_backups/

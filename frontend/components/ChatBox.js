@@ -42,6 +42,8 @@ const ChatBox = ({ data }) => {
       maxWidth: '70%',
       padding: '12px',
       borderRadius: '8px',
+      wordBreak: 'break-word', // Added to handle long text better
+
     },
     userMessage: {
       backgroundColor: '#748BA7',
@@ -119,7 +121,7 @@ const ChatBox = ({ data }) => {
 
   const truncateText = (text) => {
     if (!text || typeof text !== 'string') return '';
-    const maxLength = 20;
+    const maxLength = 32;
     return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
   };
 
@@ -226,7 +228,7 @@ return (
               ...(message.isError && { backgroundColor: '#ff5555' })
             }}
           >
-            {message.text && <div>{message.isUser ? truncateText(message.text) : message.text}</div>}
+            {message.text && <div>{message.isUser ? truncateText(message.text, 100) : message.text}</div>}
             {message.transactionData && (
               <DisplayTransaction key={`txn-${message.id}`} data={message.transactionData} />
             )}
