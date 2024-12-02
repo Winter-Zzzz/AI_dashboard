@@ -3,7 +3,7 @@ import sys
 import json
 import torch
 from transformers import T5Tokenizer, T5ForConditionalGeneration
-from utils.filter_data import TransactionFilter
+from utils.simplified_filter_data import TransactionFilter
 
 from pathlib import Path
 from config.model_config import ModelConfig
@@ -83,8 +83,8 @@ def transform_code(code: str):
     if code.endswith("))"):
         code = code[:-1]
 
-    if code.startswith("filter."):
-        code = f"filter = TransactionFilter(data).reset()\nresult = {code}\nprint(result)"
+    if code.startswith("txn."):
+        code = f"txn = TransactionFilter(data).reset()\nresult = {code}\nprint(result)"
     return code
 
 def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenizer, data: dict = None):

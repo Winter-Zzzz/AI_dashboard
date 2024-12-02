@@ -92,7 +92,7 @@ class TransactionFilter:
             # order 값에 따라 reverse 설정
             reverse = bool(order == 1)
             
-            self._filtered_data = ordered(self._filtered_data, key=actual_key, reverse=reverse)
+            self._filtered_data = sorted(self._filtered_data, key=actual_key, reverse=reverse)
             return self
         except Exception as e:
             print(f"정렬 중 에러 발생: {str(e)}")

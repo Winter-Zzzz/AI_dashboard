@@ -139,7 +139,7 @@ const getTransactions = async () => {
         }));
 
       // Generate chatData
-      const chatData = processedData.Map(item => ({
+      const chatData = processedData.map(item => ({
         pk: item.pk,
         transactions: item.transactions.map(tx => ({
           raw_data: tx.raw_data,
