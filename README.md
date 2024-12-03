@@ -23,8 +23,8 @@ This document will detail the AI model development process for AI_dashboard. We 
 Our solution eliminates intermediary-related data corruption risks, improves accessibility for non-technical users, maintains data integrity through blockchain immutability, provides real-time data analysis capabilities, and ensures secure local processing of sensitive information.
 
 ## Datasets
-### 1. `generated_dataset.json`
-A synthetic query-code parallel dataset containing 500 pairs of natural language transaction queries and their corresponding Python filter code. Each entry consists of:
+### 1. `simplified_generated_dataset.json`
+A synthetic query-code parallel dataset containing 5000 pairs of natural language transaction queries and their corresponding Python filter code. Each entry consists of:
 - Query: Natural langauge query for filtering transactions
 - Code: Corresponding Python code using `TransactionFilter` class
 
@@ -33,17 +33,17 @@ Sample format:
 {
     "dataset": [
         {
-        "input": "Get 2 from {src_pk} after {timestamp}}",
-        "output": "print(TransactionFilter(data).by_src_pk('{src_pk}}').by_timestamp('{timestamp}}').get_result()[:2])"
+            "input": "List 2 transaction to {pk} from {src_pk} setup function after {timestamp} recent",
+            "output": "txn.by_pk('{pk}').by_src_pk('{src_pk}').by_func_name('setup').by_timestamp('{timestamp}').by_order(1).get_result(2)"
         },
     ]
 }
 ```
 
-### 2. `augmented_dataset.json`
+### 2. `simplified_augmented_dataset.json`
 An augmented version of the query-code dataset using Natural Language Processing (NLP) techniques to increase lingustic diversity while preserving the semantic structure. The augmentation process maintains the original code outputs while varying the natural language queries.
 
-Sample augmented queries for the same code: 
+Sample augmented format: 
 ```json
 {
     "dataset": [
@@ -62,6 +62,7 @@ The synthetic query-code dataset is generated using `TransactionFilterDatasetGen
 - Commands: `Fetch`, `Get`, `Query`, `Load`, `Read`, `Pull`, `Show`, `List`
 - Function types: `setup`, `on`, `off`
 - Sort orders: `recent`, `earliest`
+- Count: number of transactions
 - Random public key: 130-character hexadecimal strings
 - Timestamps: Unix timestamps between 1600000000 and 1700000000
 #### 2. Query Generation Rules:
@@ -70,7 +71,7 @@ The synthetic query-code dataset is generated using `TransactionFilterDatasetGen
     - Source public key (from [src_pk])
     - Function type (setup/on/off)
     - Timestamp filter (before/after [timestamp])
-    - Transaction Count (1-10)
+    - Count (1-10)
     - Sort order (recent/earliest)
 - At least one filter condition is guranteed for each query
 
@@ -81,12 +82,12 @@ The synthetic query-code dataset is generated using `TransactionFilterDatasetGen
     - `.by_src_pk()` for source public key
     - `.by_func_name()` for function type
     - `.by_timestamp()` for timestamp filter
-    - `.sort()` for ordering
+    - `.by_order()` for ordering
     - Transaction count
 The dataset generation ensures diverse combination of filtering conditions while maintaining consistent translation patterns between natural language queries and their corresponding Python filter code.
 
 ### Data Augmentation
-The dataset is further augmented using `QueryAugmenterNlpAug` class to increase lingustic diversity while preserving the semantic structure. The augmentation process includes:
+The dataset is augmented using `QueryAugmenterNlpAug` class to increase lingustic diversity while preserving the semantic structure. The augmentation process includes:
 #### 1. Initialization and Preprocessing
 - Downloads required NLTK packages (wordnet, averaged_perceptron_tagger, averaged_perceptron_tagger_eng, punkt)
 - Initializes regex patterns for identifying:
@@ -105,60 +106,45 @@ Critical components are preserved:
 - All preserved keywords are added to stopwords list to prevent modification
 
 #### 3. Augmentation Techniques:
-This system employs four different augmenters with the following configurations:
-##### Synonym Substitution
+This system employs three different augmenters with the following configurations:
+##### WordNet Synonym Substitution
 - Using WordNet to replace query words and general terms with synonyms
 - Configurations:
-    - Probability of augmentation: 0.3 (30% chance of word replacement)
+    - Probability of augmentation: 0.2 (20% chance of word replacement)
     - Minimum words to augment: 1
     - Preserves critical keywords via stopwords
-- Example
-    - "Query" → "Retrieve"
-    - "Show" → "Display"
-    - "Recent" → "Latest", "Newest"
+- Examples:
+    - Original: "Show two transactions from [hex] after timestamp"
+    - Augmented: "Display two transactions from [hex] after timestamp"
 
-##### Contextual Word Substitution (BERT)
+##### BERT Contextual Word Substitution (BERT)
 - Utilizes bert-base-uncased model for context-aware word replacements
 - Configuration:
     - Model: bert-base-uncased
-    - Probability of substitution: 0.3
+    - Probability of substitution: 0.2
     - Minimum words to substitute: 1
     - Action: "substitute"
     - Preserves stopwords
 - Examples:
-    - "Get transactions from" → "Retrieve records from"
-    - "Show data after" → "Display entries after"
-
-##### Contextual Word Insertion (BERT)
-- Uses bert-base-uncased model to insert contextually appropriate words
-Configuration:
-    - Model: bert-base-uncased
-    - Probability of insertion: 0.3
-    - Minimum words to insert: 1
-    - Action: "insert"
-    - Preserves stopwords
-- Examples:
-    - "Get from [src_pk]" → "Get all transactions from [src_pk]"
-    - "Show after timestamp" → "Show all records after timestamp"
+    - Original: "Get transactions to [hex] setup function"
+    - Augmented: "Fetch records to [hex] setup function"
 
 ##### Random Word Swap
-- Performs controlled random swapping of compatible words to create syntactic variations
+- Performs controlled random swapping of words to create syntactic variations
 - Configuration:
     - Probability of swap: 0.3
     - Minimum words to swap: 1
     - Action: "swap"
     - Preserves stopwords and critical structure
 - Examples:
-    - "Query recent transactions from [src_pk]" → "Recent transactions query from [src_pk]"
-    - "Get earliest data after timestamp" → "After timestamp get earliest data"
+    - Original: "Query recent transactions from [hex]"
+    - Augmented: "Recent transactions query from [hex]"
 
 Each augmentation technique is applied sequentially, with careful preservation of critical elements like:
 - Hexadecimal public keys
 - Function types (setup/on/off function)
 - Timestamps
 - Directional indicators (to/from)
-
-The probability settings (0.3) ensure moderate augmentation while maintaining query comprehensibility and functional equivalence. All augmented outputs are validated to ensure they maintain the correct semantic mapping to their corresponding filter code.
 
 ![Data Augmentation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/data_augmentation_result.png?raw=true)
 
@@ -175,10 +161,12 @@ The system ensures data quality through three main steps:
 
 ##### Text Cleaning
 1. Output Text Processing:
-   - Converts function references: "on function" → "on" in by_func_name calls
-   - Removes extra spaces in method chains
-   - Example: "TransactionFilter(data).by_func_name('on').get_result()"
-
+    - Removes spaces in method chains
+    - Example:
+        - Before: "txn.by_func_name('setup') . get_result()
+        - After: "txn.by_func_name('setup').get_result()
+    - Cleans parentheses spacing
+    - Strips whitespace
 2. Input Text Cleaning:
    - Removes excessive whitespace
    - Preserves critical keywords (function names, hex values, timestamps)
@@ -186,135 +174,282 @@ The system ensures data quality through three main steps:
 ##### Data Validation
 - Filters out invalid augmentations (containing 'UNK' tokens)
 - Removes duplicate input-output pairs
-- Verifies complete TransactionFilter syntax
-- Checks hex values maintain 130-character length
+- Processes in batches of 512 for efficiency
+- Includes error handling and logging
 
 This multi-layered quality control process ensures that the augmented dataset maintains high standards of quality and usefulness for training purposes while preserving the essential characteristics of the original queries.
 
 ### Model Training and Fine-tuning
 Our model architecture is based on the T5 (Text-to-Text Transfer Transformer), specifically configured for the task of translating natural language queries into transaction filter code. The training process incorporates the following specifications:
 
-1. **Model Configuration**
-   - Base Model: T5-base
-   - Maximum Sequence Length: 512 tokens
-   - Maximum Generation Length: 512 tokens
-   - Training Device: GPU with CUDA support (CPU fallback available)
+#### 1. Model Configuration
+- Base Model: T5-small
+- Maximum Sequence Length: 256 tokens
+- Maximum Generation Length: 256 tokens
+- Training Device: GPU with CUDA support (CPU fallback available)
 
-2. **Token Processing**
-    - Special Tokens
-        ```python
-        [
-            'print(TransactionFilter(data)',
-            'get_result()',
-            '.by_pk', 
-            '.by_src_pk',
-            '.by_timestamp',
-            '.by_func_name',
-            "('setup')",
-            "('on')",
-            "('off')",
-            '.sort(reverse=True)',
-            '.sort()',
-            '.',
-            ')'
-        ]
-        ```
-    - Token Embedding Resizing: Accomodates additional special tokens
-    - Prefix Space Addition: Enhanced tokenization for speical tokens
-    - Attention Masking: Handles variable length sequences
+#### 2. Token Processing
+- Special Tokens
+    ```python
+    [
+        '<hex>',
+        '</hex>',
+        '<time>',
+        '</time>'
+    ]
+    ```
+- Token Embedding Resizing: Accomodates additional special tokens
+- Prefix Space Addition: Right-side padding with EOS token
+- Attention Masking: Handles variable length sequences
 
-3. **Training Parameters**
-   - Learning Rate: 1e-4
-   - Batch Size: 4
-   - Weight Decay: 0.01
-   - Number of Epochs: 20
-   - Early Stopping Patience: 5
-   - Gradient Clipping: 0.5
-   - Warm-up Ratio: 0.1
+#### 3. Training Parameters
+- Learning Rate: 5e-5
+- Batch Size: 8 (with gradient accumulation steps of 4)
+- Weight Decay: 0.01
+- Number of Epochs: 30
+- Early Stopping Patience: 7
+- Gradient Clipping: 1.0
+- Gradient Accumulation Steps: 4
 
-4. **Generation Settings**
-   - Beam Search Size: 10
-   - Early Stopping: Enabled
+#### 4. Generation Settings
+- Beam Search Size: 5
+- Length Penalty: 1.0
+- No Repeat N-gram Size: 0
+- Early Stopping: Enabled
 
-5. **Training Process**
-   - Data Split: 90% training, 10% validation
-   - Optimizer: AdamW with linear warmup scheduler
-   - Loss Function: Cross-entropy loss
-   - Gradient Updates: Per batch with zero_grad()
-   - Checkpointing: Saves best model based on validation loss
+#### 5. Training Process
+- Data Split: 90% training, 10% validation
+- Optimizer: AdamW with linear warmup scheduler
+- Mixed Precision Training: Automatic mixed precision with GradScaler
+- Warmup: 10% of total steps
+- Checkpointing: Saves best model based on validation loss
+- Progress Tracking: Real-time loss monitoring and visualization
+
+#### 6. Implementation Details
+1. **Training Tracker System**
+
+    ```python
+    class TrainingTracker:
+        """
+        Tracks training progress, saves status, and visualizes performance metrics
+        """
+    ```
+    Components:
+    - Real-time loss monitoring
+    - Best model checkpointing
+    - Progress visualization
+    - Training status persistence
+2. **Training Optimization**: Resource Management
+    ```python
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+        print(f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.0f}MB")
+    ```
+    Optimization techniques:
+        - GPU acceleration when available
+        - Automoatic memory clearing before training
+        - Mixed precision training with GradScaler
+
+
+
+        - Gradient accumulation (steps=4)
+
+3. **Training Process Control**
+: Early Stopping Implentation
+    ```python
+    if no_improve >= patience:  # patience = 7
+    print("🛑 Early stopping triggered!")
+    break
+    ```
+- Patience-based monitoring (7 epochs)
+- Best model preservation
+- Training efficiency optimization
+
+4. **Performance Monitoring**: Metrics Tracking
+- Training Loss
+    - Batch-level monitoring
+    - Running average calculation
+    - Gradient accumulation adjustments
+- Validationn Process
+    - Per-epoch validation
+    - Best model selection
+    - Early stopping triggers
+
+5. **Stauts Management**
+    ```json
+    {
+        "current_epoch": current,
+        "best_loss": loss_value,
+        "last_train_loss": train_loss,
+        "total_improvements": count
+    }
+    ```
+    ![training_status](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_status.png?raw=true)
+
+6. **Validation Sampling**
+
+Each epoch includes validation output sampling for quality control
+- Input query verification
+- Output code structure validation
+
+The training configuration emphasizes efficiency and performance through the use of gradient accumulation, mixed precision training, and careful hyperparameter selection. The relatively small sequence length of 256 tokens is sufficient for our query-to-code translation task while enabling faster training and inference.
+
+### Installation and Setup
+Follow these steps to set up and run the project:
+1. Download Required Model File: [models.safetensors](https://drive.google.com/file/d/186jAWNLmJbB1TuqCvWWg1eY4D7Q3aDW6/view)
+
+2. Place it in the following directory: `ai/models/best_models`
+
+3. Grant execution permissions to the setup script
+    ```bash
+    chmod +x setup.sh
+    ```
+
+4. Run the setup script
+    ```bash
+    ./setup.sh
+    ```
+
+### API Server Implementation
+#### FastAPI Server Configuration
+- Implements a FastAPI server with CORS middleware enabled
+- Server runs on host "0.0.0.0" and port 8000
+- Allows cross-origin requests from all origins with full method and header access
+
+#### API Endpoints
+`/api/query-transactions` (GET)
+
+Response Format:
+```json
+{
+    "status": "success",
+    "data": {
+        "transactions": [...],
+        "generated_code": "transformed_code_string",
+        "query_text": "original_query_string"
+    }
+}
+```
 
 ## Evaluation
-The evaluation framework consists of multiple components to assess model performance:
+After training for 30 epochs, our model demonstrated robust performance and consistent learning characteristics. Here's a comprehensive analysis of the results.
 
-1. **Training Metrics**
-    - Loss Tracking: Average training and validation loss per epoch
-    - Model Convergence: Monitoring loss improvement over time
-    - Example Generation: Sample outputs every 50 batches for quality assessment
+1. **Training Performances**
+    - Best Loss: 0.00369
+    - Average Training Loss: 0.0054
+    - Average Validation Loss: 0.0043
+    - Total Training Epochs: 30
+   - Total Improvements: 30
 
-2. **Performance Monitoring**
-    - Training Progress Visualization
-    - Real-time Loss Tracking
-    - Automatic Model Checkpointing
-    - Training Status Logging
+2. **Convergence Analysis**
 
-3. **Quality Assessment**
-    - Syntax Validation: Ensuring correct TransactionFilter code generation
-    - Semantic Accuracy: Verifying query intent preservation
-    -Example Generation: Regular validation of model outputs
-    - Comprehensive Final Evaluation: Detailed analysis of model performance
+    ![training_progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
 
-The evaluation results are stored in both JSON format for detailed analysis and text format for human readability, allowing for thorough assessment of the model's capabilities and limitations.
+    The system generates real-time training progress plots showing:
+    - Epoch-wise training loss
+    - Improvement points highlighted
+    - Learning rate scheduling effects
+    - Training Progress Plot:
+        - X-axis: Epochs
+        - Y-axis: Loss values
+        - Green dots: Points of improvement
+        - Continuous line: Training loss trend
+
+    The training progress plot demonstrates strong convergence characteristics:
+    - Initial rapid learning phase with loss dropping from 1.2 to 0.4 in first 2 epochs
+    - Steady improvement phase between epochs 2-10
+    - Fine-tuning phase after epoch 10 with consistent minor improvements
+    - No signs of overfitting (validation loss consistently below training loss)
+    - Smooth convergence curve without significant fluctuations
+    
+    ![training_progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
+
+3. **Model Validation**
+
+    Each epoch includes sample validation outputs:
+
+    ![Validation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/validation.png?raw=true)
+
+    The model demonstrates:
+    - Correct preservation of query structure
+    - Accurate handling of special tokens and timestamps
+    - Proper translation of natural language to filter chain syntax
+    - Appropriate parameter formatting and method ordering
+
+4. **Performance Summary**
+    The evaludation results indicate that
+    - The model successfully learned the natural language to code translation task
+    - Training was stable and efficient without triggering early stopping
+    - The low validation loss (0.0043) suggests good generalization capability
+    - The model maintains consistent performance across different query patterns and complexities
+
+These results validate that our model is well-suited for the AI_dashboard system's requirements of translating natural language queries into blockchain transaction filter code.
 
 ## Conclusion
 
-Our AI_Dashboard project successfully demonstrates an effective approach to bridging the gap between natural language interaction and blockchain data querying. Through careful implementation of dataset generation, augmentation, and model training, we have created a robust system that addresses key challenges in blockchain data accessibility.
+This paper presented AI_dashboard, an innovative solution that bridges the gap between natural language interaction and blockchain data analysis. Our implementation successfully demonstrates several key technical achievements and system benefits while opening avenues for future development.
 
 ### Technical Achievements
 
-1. **Dataset Development**
-   - Successfully generated a synthetic dataset of 500 query-code pairs
-   - Implemented sophisticated data augmentation techniques using NLP
-   - Maintained semantic integrity through careful preservation rules
-   - Achieved diverse query variations while ensuring code accuracy
+1. **Advanced Data Generation and Augmentation**
+   - Successfully generated a comprehensive synthetic dataset of 5000 query-code pairs
+   - Implemented sophisticated augmentation techniques using WordNet, BERT, and random word swap methods
+   - Achieved high-quality data preservation through multi-layered quality control processes
 
-2. **Model Implementation**
-   - Successfully fine-tuned T5-base for specialized code generation
-   - Implemented custom tokenization with domain-specific tokens
-   - Achieved efficient training with early stopping mechanism
-   - Developed robust evaluation frameworks for performance assessment
+2. **Effective Model Architecture and Training**
+   - Successfully fine-tuned T5-small model for query-to-code translation
+   - Achieved impressive convergence with best loss of 0.00369
+   - Implemented efficient training optimizations including gradient accumulation and mixed precision training
+   - Demonstrated stable learning characteristics across 30 epochs without overfitting
 
-3. **Quality Control**
-   - Implemented multi-layered validation systems
-   - Maintained high standards in data quality
-   - Ensured semantic consistency in augmented data
-   - Developed comprehensive evaluation metrics
+3. **Direct Blockchain Integration**
+   - Developed a scalable FastAPI server architecture with gRPC connection
+   - Implemented comprehensive error handling and validation
+   - Ensures data integrity through direct blockchain access without intermediaries
 
 ### System Benefits
 
-1. **Accessibility**
-   - Eliminated technical barriers for non-technical users
-   - Enabled natural language interaction with blockchain data
-   - Simplified complex query construction
-   - Reduced dependency on technical expertise
+1. **Enhanced Accessibility**
+   - Democratized blockchain data access for non-technical users
+   - Eliminated the need for specialized query language knowledge
+   - Reduced the learning curve for new team members
 
-2. **Data Integrity**
-   - Maintained blockchain data immutability
-   - Implemented direct gRPC connection to Hyperledger Fabric
-   - Eliminated intermediary-related corruption risks
-   - Ensured secure local processing
+2. **Guaranteed Data Integrity**
+   - Direct blockchain integration through gRPC ensures data authenticity
+   - No intermediary systems that could potentially compromise data
+   - Leverages blockchain's inherent immutability for reliable data access
 
-### Future Work
+3. **Operational Efficiency**
+   - Real-time natural language query processing
+   - Direct blockchain data access for immediate insights
+   - Streamlined workflow for data analysis tasks
 
-1. **Model Enhancement**
+### Current Limitations and Future Work
+
+1. **Computational Resources and Data Scale**
+   - Current implementation was constrained by Google Colab's GPU usage limits
+   - Training data size was optimized for available computational resources
+   - Access to more powerful GPU infrastructure would enable:
+     - Larger-scale data augmentation
+     - More extensive model training
+     - Experimentation with larger language models
+     - Potential for significantly improved performance metrics
+
+2. **Model Enhancement**
    - Expand the training dataset with more complex query patterns
-   - Implement additional augmentation techniques
-   - Explore advanced model architectures
-   - Optimize performance for larger-scale deployments
+   - Explore larger language models for improved accuracy
+   - Implement continuous learning capabilities with user feedback
 
-2. **System Development**
-   - Enhance error handling mechanisms
-   - Implement additional blockchain platform support
-   - Develop more sophisticated monitoring tools
-   - Expand query capabilities
+3. **Feature Extensions**
+   - Develop support for more complex analytical queries
+   - Add visualization capabilities for query results
+   - Implement batch processing for large-scale analyses
 
-Our implementation successfully demonstrates the viability of using natural language processing for blockchain data querying, providing a foundation for future development in making blockchain technology more accessible to non-technical users while maintaining the security and integrity of the underlying data.
+4. **Performance Optimization**
+   - Enhance query processing efficiency
+   - Optimize for large-scale deployments
+   - Expand blockchain integration capabilities
+
+This project successfully demonstrates the potential of combining AI with blockchain technology to create more accessible and efficient data analysis tools. While our current implementation was constrained by computational resources in the Google Colab environment, the achieved results show significant promise. With access to more powerful GPU infrastructure, the system could be further enhanced through larger-scale data augmentation and more extensive model training. The strong foundation established in this work, particularly the direct blockchain integration ensuring data integrity, provides an excellent starting point for both academic research and practical applications in the blockchain industry.
