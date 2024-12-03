@@ -18,3 +18,4 @@ logs/
 
 # Node.js 종속성 무시
 node_modules/
+ai/models/best_model/model.safetensors
