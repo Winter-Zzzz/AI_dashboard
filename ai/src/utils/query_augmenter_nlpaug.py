@@ -20,8 +20,9 @@ class QueryAugmenterNlpAug:
     def __init__(self):
         self._download_nltk_data()
         self._init_patterns()
-        self._init_preserved_keywords()
         self._init_number_variations()
+        self._init_preserved_keywords()
+
 
     def _download_nltk_data(self):
         """NLTK 데이터 패키지가 설치되어 있는지 확인하고 없으면 다운로드"""
@@ -35,27 +36,28 @@ class QueryAugmenterNlpAug:
     def _init_patterns(self):
         """텍스트에서 특정 패턴을 식별하기 위한 정규 표현식 초기화"""
         self.patterns = {
-            'hex': re.compile(r'[0-9a-fA-F]{130}'), # 130자리 16진수 값
-            'from': re.compile(r'from\s+([0-9a-fA-F]{130})'), # from [hex]
-            'to': re.compile(r'to\s+([0-9a-fA-F]{130})'), # to [hex]
-            'timestamp': re.compile(r'\b\d{10}\b'), 
-            'func_name': re.compile(r'\b(setup function|on function|off function)\b', re.IGNORECASE) 
-        }
-    
-    def _init_preserved_keywords(self):
-        """모델 처리 중 변경하지 말아야 할 키워드"""
-        self.preserved_keywords = {
-            'setup function', 'on function', 'off function', 'to', 'from'
+        'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
+        'from': re.compile(r'from\s+(?P<hex>[0-9a-fA-F]{130})'),  # from [hex]
+        'by': re.compile(r'by\s+(?P<hex>[0-9a-fA-F]{130})'),  # by [hex]
+        'to': re.compile(r'to\s+(?P<hex>[0-9a-fA-F]{130})'),  # to [hex]
+        'timestamp': re.compile(r'\b(?P<timestamp>\d{10})\b'),
+        'func_name': re.compile(r'\b(setup function|on function|off function|feedback function)\b', re.IGNORECASE),
+        'time_order': re.compile(r'\b(most recent)\b', re.IGNORECASE),
+        'count': re.compile(r'\b(?P<count>all|one|two|three|four|five|six|seven|eight|nine|ten|[1-9]|10)\b', re.IGNORECASE),
         }
 
     def _init_number_variations(self):
         """숫자를 다양한 텍스트 표현과 매칭되도록 처리함"""
         self.number_variations = { # 숫자 변형 정의
-            1: ['one', 'single', '1'],
-            2: ['two', 'couple', '2'],
+            1: ['one', '1'],
+            2: ['two', '2'],
             3: ['three', '3'],
             4: ['four', '4'],
             5: ['five', '5'],
+            6: ['six', '6'],
+            7: ['seven', '7'],
+            8: ['eight', '8'],
+            9: ['nine', '9'],
             10: ['ten', '10']
         }
         number_words = '|'.join(item for sublist in self.number_variations.values() for item in sublist)
@@ -63,6 +65,26 @@ class QueryAugmenterNlpAug:
             rf'\b(?!(?:[0-9a-fA-F]{{130}}|\d{{10}})\b)({number_words}|\d+)\b',
             re.IGNORECASE
         )
+
+    def _init_preserved_keywords(self):
+        """모델 처리 중 변경하지 말아야 할 키워드와 숫자"""
+        self.preserved_keywords = {
+            # 함수 관련
+            '<func_name>setup function</func_name>', '<func_name>on function</func_name>', 
+            '<func_name>off function</func_name>', '<func_name>feedback function</func_name>',
+            # 방향 관련
+            'to', 'from', 'by'
+            # 수량 관련
+            'all',
+            # 시간 관련
+            'latest', 'oldest', 'earliest', 'recent', '<time_order>most recent</time_order>'
+            'after', 'before',
+            # 트랜잭션 관련
+            'transaction', 'transactions', 'txns', 'txn'
+        }
+        # number_variations의 모든 숫자 표현도 preserved_keywords에 추가
+        for variations in self.number_variations.values():
+            self.preserved_keywords.update(variations)
 
     def is_preserved(self, word: str) -> bool:
         """주어진 키워드가 보존되어야 하는 키워드인지 확인"""
@@ -75,12 +97,30 @@ class QueryAugmenterNlpAug:
         """정지어 리스트 추출"""
         stopwords = [word for word in text if self.is_preserved(word)]
         return stopwords
+    
+    def preprocess_text(self, text:str) -> str:
+        """텍스트 전처리"""
+        # 1. time_order 패턴 (most recent 등) 먼저 처리
+        text = self.patterns['time_order'].sub(lambda m: f"<time_order>{m.group()}</time_order>", text)
+        
+        # 2. 그 다음 hex 패턴 (all, 숫자 포함)
+        text = self.patterns['hex'].sub(lambda m: f"<hex>{m.group()}</hex>", text)
+        
+        # 3. function 패턴
+        text = self.patterns['func_name'].sub(lambda m: f"<func_name>{m.group()}</func_name>", text)
+        
+        # 5. timestamp 패턴
+        text = self.patterns['timestamp'].sub(lambda m: f"<timestamp>{m.group()}</timestamp>", text)
+        
+        return text
 
     def initialize_augmenter(self, texts: List[str]):
         """입력된 텍스트 리스트를 사용하여 증강기를 초기화함"""
 
         # 텍스트 결합 - 입력된 텍스트를 하나로 결합하고 이를 단어 단위로 나눔
-        combined_text = " ".join(texts)
+        preprocessed_texts = [self.preprocess_text(text) for text in texts]
+
+        combined_text = " ".join(preprocessed_texts)
         words = combined_text.split()
 
         # 정지어 생성 
@@ -120,9 +160,10 @@ class QueryAugmenterNlpAug:
         words = text.lower().split()
         off_count = words.count('off')
         setup_count = words.count('setup')
+        feedback_count = words.count('feedback')
         
         # off나 setup이 1번 초과로 나오면 거부
-        return off_count <= 1 and setup_count <= 1
+        return off_count <= 1 and setup_count <= 1 and feedback_count <= 1
 
     def clean_output_text(self, text: str) -> str:
         """증강 데이터에 대한 기본적인 텍스트 정제"""
@@ -209,44 +250,44 @@ def save_augmented_data(augmented_inputs: List[str], augmented_outputs: List[str
     return data
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.INFO)
 
-    # 프로젝트 루트 경로 설정 및 sys.path에 추가
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
-    sys.path.append(project_root)
+        # 프로젝트 루트 경로 설정 및 sys.path에 추가
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
+        sys.path.append(project_root)
 
-    # 데이터셋 경로 설정
-    raw_data_path = os.path.join(project_root, 'ai', 'data', 'raw', 'simplified_generated_dataset.json')
-    augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented', 'simplified_augmented_dataset.json')
+        # 데이터셋 경로 설정
+        raw_data_path = os.path.join(project_root, 'ai', 'data', 'raw', 'simplified_generated_dataset.json')
+        augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented', 'simplified_augmented_dataset.json')
 
-    # 원본 데이터 로드
-    try:
-        input_texts, output_texts = load_training_data(raw_data_path)
+        # 원본 데이터 로드
+        try:
+            input_texts, output_texts = load_training_data(raw_data_path)
 
-        # 데이터 검증
-        if not isinstance(input_texts, list) or not isinstance(output_texts, list):
-            raise ValueError("Training data must be lists.")
+            # 데이터 검증
+            if not isinstance(input_texts, list) or not isinstance(output_texts, list):
+                raise ValueError("Training data must be lists.")
 
-        if any(not isinstance(text, str) for text in input_texts):
-            raise ValueError("All input data must be strings.")
+            if any(not isinstance(text, str) for text in input_texts):
+                raise ValueError("All input data must be strings.")
 
-        if any(not isinstance(text, str) for text in output_texts):
-            raise ValueError("All output data must be strings.")
-        
-    except Exception as e:
-        logging.error(f"Error loading or validating training data: {e}")
-        sys.exit(1)  # 에러 발생 시 종료
+            if any(not isinstance(text, str) for text in output_texts):
+                raise ValueError("All output data must be strings.")
+            
+        except Exception as e:
+            logging.error(f"Error loading or validating training data: {e}")
+            sys.exit(1)  # 에러 발생 시 종료
 
-    logging.info(f"Loaded {len(input_texts)} input-output pairs for augmentation.")
+        logging.info(f"Loaded {len(input_texts)} input-output pairs for augmentation.")
 
-    augmenter = QueryAugmenterNlpAug()
+        augmenter = QueryAugmenterNlpAug()
 
-    augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts, 1, 512)
+        augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts, 1, 512)
 
-    # 증강된 데이터를 저장
-    try:
-        save_augmented_data(augmented_inputs, augmented_outputs, augmented_data_path)
-        logging.info(f"Augmented data saved to {augmented_data_path}")
-    except Exception as e:
-        logging.error(f"Error saving augmented data: {e}")
-        sys.exit(1)
+        # 증강된 데이터를 저장
+        try:
+            save_augmented_data(augmented_inputs, augmented_outputs, augmented_data_path)
+            logging.info(f"Augmented data saved to {augmented_data_path}")
+        except Exception as e:
+            logging.error(f"Error saving augmented data: {e}")
+            sys.exit(1)
