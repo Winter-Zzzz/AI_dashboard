@@ -139,12 +139,16 @@ class TransactionFilterDatasetGenerator:
                     "oldest" in input_text.lower() or 
                     "latest" in input_text.lower())
         
-        if "oldest" or "earliest" in input_text:
+        input_lower = input_text.lower()
+        if "oldest" in input_lower or "earliest" in input_lower:
             filter_chain += ".by_order(0)"
-        elif "latest" or "recent" in input_text:
+        elif "most recent" in input_lower:
+            filter_chain += ".by_order(1)"
+        elif "latest" in input_lower or "recent" in input_lower:
             filter_chain += ".by_order(1)"
         else:
             filter_chain += ".by_order(0)"
+        
         
         # count 처리
         input_without_transaction = input_text.replace('transaction', '').replace('transactions', '')
@@ -160,12 +164,10 @@ class TransactionFilterDatasetGenerator:
         # 2. 숫자가 없고 시간 순서 키워드가 있으면 count를 1로 설정
         if count is None and has_order_keyword:
             count = "1"
-        # 3. 'all' 키워드 확인 또는 복수형 확인
         else:
-            has_plural = 'txns' in input_text.lower() or 'transactions' in input_text.lower()
+            has_plural = 'txns' in input_lower or 'transactions' in input_lower
             if 'all' in input_without_transaction.lower() or (has_plural and count is None):
                 count = "-1"
-            # 4. 위의 모든 경우가 아니면 기본값 -1
             elif count is None:
                 count = "-1"
 
@@ -186,7 +188,7 @@ class TransactionFilterDatasetGenerator:
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(5000)
+dataset = generator.generate_dataset(2500)
 
 # 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
