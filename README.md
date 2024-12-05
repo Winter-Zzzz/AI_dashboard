@@ -33,9 +33,13 @@ Sample format:
 {
     "dataset": [
         {
-            "input": "List 2 transaction to {pk} from {src_pk} setup function after {timestamp} recent",
-            "output": "txn.by_pk('{pk}').by_src_pk('{src_pk}').by_func_name('setup').by_timestamp('{timestamp}').by_order(1).get_result(2)"
+            "input": "Pull transaction from {src_pk}",
+            "output": "txn.by_pk(-1).by_src_pk('{src_pk}').by_func_name(-1).by_order(0).get_result(-1)"
         },
+        {
+            "input": "Load all recent from {src_pk} between {timestamp_1} and {timestamp_2}",
+            "output": "txn.by_pk(-1).by_src_pk('{src_pk}').by_func_name(-1).between('{timestamp_1}', '{timestamp_2}').by_order(1).get_result(-1)"
+        }
     ]
 }
 ```
@@ -48,8 +52,12 @@ Sample augmented format:
 {
     "dataset": [
         {
-            "input": "Catch two from 302b0eec8ff93c491a933ce925dc302a654a0b0c12b6cc7719e46a7734662bb9c9edc3430091217f52d6ee8f7b10ccc0007f0744372e6181af87e6e31eb6f19687 after 1651024241",
-            "output": "print(TransactionFilter(data).by_src_pk('{src_pk}}').by_timestamp('{timestamp}}').get_result()[:2])"
+            "input": "Load most recent dealings to {pk} from {src_Pk}",
+            "output": "txn.by_pk('{pk}').by_src_pk('{src_Pk}').by_func_name(-1).by_order(1).get_result(1)"
+        },
+        {
+            "input": "4 fetch transactions to {pk} between by {src_Pk} and {timestamp_1} {timestamp_2}",
+            "output": "txn.by_pk('{pk}').by_src_pk('{src_Pk}').by_func_name(-1).between('{timestamp_1}', '{timestamp_2}').by_order(0).get_result(4)"
         },
     ]
 }
@@ -60,19 +68,19 @@ Sample augmented format:
 The synthetic query-code dataset is generated using `TransactionFilterDatasetGenerator` class with the following parameters and logic.
 #### 1. Query Generation Components:
 - Commands: `Fetch`, `Get`, `Query`, `Load`, `Read`, `Pull`, `Show`, `List`
-- Function types: `setup`, `on`, `off`
-- Sort orders: `recent`, `earliest`
-- Count: number of transactions
+- Sort orders: `recent`, `earliest`, `latest`, `oldest`, `most recent`
+- Random function name: `setAnimal`, `changeColor`, `getCoordinate`, ...
+- Random count: number of transactions (ex. 1, 'one', 2, 'two', ...)
 - Random public key: 130-character hexadecimal strings
-- Timestamps: Unix timestamps between 1600000000 and 1700000000
-#### 2. Query Generation Rules:
+- Random Timestamps: Unix timestamps between 1730780906 and 1800000000
+#### 2. Input Query Generation Rules:
 - Each query randomly includes combinations of:
     - Target public key (to [pk])
-    - Source public key (from [src_pk])
-    - Function type (setup/on/off)
+    - Source public key (from, by [src_pk])
+    - Random function name 
     - Timestamp filter (before/after [timestamp])
     - Count (1-10)
-    - Sort order (recent/earliest)
+    - Sort order
 - At least one filter condition is guranteed for each query
 
 #### 3. Code Generation Logic
@@ -81,76 +89,124 @@ The synthetic query-code dataset is generated using `TransactionFilterDatasetGen
     - `.by_pk()` for target public key
     - `.by_src_pk()` for source public key
     - `.by_func_name()` for function type
-    - `.by_timestamp()` for timestamp filter
+    - `.after()` for transactions after timestamp 
+    - `.before()` for transactions before timestamp
     - `.by_order()` for ordering
-    - Transaction count
+    - `.get_result()` for transaction count
 The dataset generation ensures diverse combination of filtering conditions while maintaining consistent translation patterns between natural language queries and their corresponding Python filter code.
 
 ### Data Augmentation
 The dataset is augmented using `QueryAugmenterNlpAug` class to increase lingustic diversity while preserving the semantic structure. The augmentation process includes:
 #### 1. Initialization and Preprocessing
-- Downloads required NLTK packages (wordnet, averaged_perceptron_tagger, averaged_perceptron_tagger_eng, punkt)
+The system initializes with several crucial setup steps:
+- Downloads required NLTK packages:
+    - wordnet
+    - averaged_perceptron_tagger
+    - averaged_perceptron_tagger_eng
+    - punkt
 - Initializes regex patterns for identifying:
     - 130-character hexadecimal values
-    - from/to patterns with hex public key
-    - Unix timestamps
-    - Function types (setup/on/off function)
-- Defines preserved keywords and number variations
+    - Unix timestamps (10-digit numbers)
+    - Number variations and their text representation
+- Sets up preserved keywords including:
+    - Directional terms (`to`, `from`, `by`)
+    - Quantifiers (`all`)
+    - Temporal indicators (`latest`, `oldest`, `earliest`, `recent`, `most recent`)
+    - Time relations (`after`, `before`, `between`)
+    - Transaction-related terms (`transaction`, `transactions`, `txns`, `txn`)
+    - Function-related terms (`function`, `functions`)
 
 #### 2. Preservation Rules:
-Critical components are preserved:
-- Hexadecimal public key
-- Function type (setup/on/off function)
-- Timestamp (10-digit numbers)
-- Directional keywords (to/from)
-- All preserved keywords are added to stopwords list to prevent modification
+The system maintains critical components through careful preservation rules:
+- All preserved keywords are automatically added to the stopwords list
+- Special handling for compound terms like "most recent"
+- Preservation of technical identifiers:
+    - Hexadecimal values
+    - Timestamps
+    - Function types
+    - Direction indicators
 
 #### 3. Augmentation Techniques:
-This system employs three different augmenters with the following configurations:
+This system employs three distinct augmentation methods:
 ##### WordNet Synonym Substitution
-- Using WordNet to replace query words and general terms with synonyms
-- Configurations:
-    - Probability of augmentation: 0.2 (20% chance of word replacement)
-    - Minimum words to augment: 1
-    - Preserves critical keywords via stopwords
+```python
+naw.SynonymAug(
+    aug_src='wordnet',
+    aug_p=0.2,
+    aug_min=1,
+    stopwords=stopwords
+)
+```
+- Replaces words with semantically similar alternatives
+- 20% probability of word replacement
+- Minimum one word augmentation
+- Preserved stopwords and critical terms
 - Examples:
-    - Original: "Show two transactions from [hex] after timestamp"
-    - Augmented: "Display two transactions from [hex] after timestamp"
+    - Original: "Show two transactions from {hex} after {timestamp}"
+    - Augmented: "Display two transactions from {hex} after {timestamp}"
 
 ##### BERT Contextual Word Substitution (BERT)
-- Utilizes bert-base-uncased model for context-aware word replacements
-- Configuration:
-    - Model: bert-base-uncased
-    - Probability of substitution: 0.2
-    - Minimum words to substitute: 1
-    - Action: "substitute"
-    - Preserves stopwords
+```python
+naw.ContextualWordEmbsAug(
+    model_path='bert-base-uncased',
+    device='cuda',
+    action="substitute",
+    aug_p=0.2,
+    aug_min=1,
+    stopwords=stopwords
+)
+```
+- Uses BERT model for context-aware replacements
+- 20% substitution probability
+- Runs on CUDA for improved performance
+- Maintains contextual relevance
 - Examples:
-    - Original: "Get transactions to [hex] setup function"
-    - Augmented: "Fetch records to [hex] setup function"
+    - Original: "Get transactions to {hex} setup function"
+    - Augmented: "Fetch records to {hex} setup function"
 
 ##### Random Word Swap
-- Performs controlled random swapping of words to create syntactic variations
-- Configuration:
-    - Probability of swap: 0.3
-    - Minimum words to swap: 1
-    - Action: "swap"
-    - Preserves stopwords and critical structure
+```python
+naw.RandomWordAug(
+    action="swap",
+    aug_p=0.3,
+    aug_min=1,
+    stopwords=stopwords
+)
+```
+- Creates syntactic variations through controlled word swapping
+- 30% swap probability
+- Preserves critical structure and stopwords
 - Examples:
-    - Original: "Query recent transactions from [hex]"
-    - Augmented: "Recent transactions query from [hex]"
-
-Each augmentation technique is applied sequentially, with careful preservation of critical elements like:
-- Hexadecimal public keys
-- Function types (setup/on/off function)
-- Timestamps
-- Directional indicators (to/from)
+    - Original: "Query recent transactions from {hex}"
+    - Augmented: "Recent transactions query from {hex}"
 
 ![Data Augmentation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/data_augmentation_result.png?raw=true)
 
-#### 4. Quality Control
+#### 4. Processing Pipeline
+The augmentation process follows a structured pipeline:
+##### Pre-processing
+- Special token handling:
+    - Converts "{func_name} function" patterns to "{func_name}_FUNCTION"
+    - Transforms "most recent" to "_MOST_RECENT"
+- Applies preservation rules
 
-The system ensures data quality through three main steps:
+##### Batch Processing
+- Processees data in batches of 512 entries
+- Applies all three augmentation techniqeus sequentially
+- Maintains progress tracking wit tqdm
+
+##### Post-processing
+- Restores special tokens to original form
+- Performs text cleaning:
+    - Removes excess whitespace
+    - Standardizes punctuation spacing
+    - Normalizes method chains
+
+##### Quality Control 
+- Filters out augmentations containing 'UNK' tokens
+- Removes duplicate input-output pairs
+- Includes comprehensive error handling and logging
+- Validates input and output data types 
 
 ##### Input Validation
 - Only one function type (setup/on/off) allowed per query
@@ -159,25 +215,15 @@ The system ensures data quality through three main steps:
   - Valid: "Get setup function data"
   - Invalid: "Get setup on function data"
 
-##### Text Cleaning
-1. Output Text Processing:
-    - Removes spaces in method chains
-    - Example:
-        - Before: "txn.by_func_name('setup') . get_result()
-        - After: "txn.by_func_name('setup').get_result()
-    - Cleans parentheses spacing
-    - Strips whitespace
-2. Input Text Cleaning:
-   - Removes excessive whitespace
-   - Preserves critical keywords (function names, hex values, timestamps)
+#### 5. Data Management
+The augmented data is managed through structured file operations:
+- Saves results to JSON format with detailed structure
+- Maintains original-augmented pairs relationship
+- Generates augmentation statistics
+- Provides absolute path references for data files
 
-##### Data Validation
-- Filters out invalid augmentations (containing 'UNK' tokens)
-- Removes duplicate input-output pairs
-- Processes in batches of 512 for efficiency
-- Includes error handling and logging
+The system ensures high-quality augmentation while maintaining data integrity meaning through the process.
 
-This multi-layered quality control process ensures that the augmented dataset maintains high standards of quality and usefulness for training purposes while preserving the essential characteristics of the original queries.
 
 ### Model Training and Fine-tuning
 Our model architecture is based on the T5 (Text-to-Text Transfer Transformer), specifically configured for the task of translating natural language queries into transaction filter code. The training process incorporates the following specifications:
