@@ -7,7 +7,7 @@ class TransactionFilterDatasetGenerator:
     def __init__(self):
         self.commands = ['Fetch', 'Get', 'Query', 'Load', 'Read', 'Pull', 'Show', 'List']
         self.orders = ['latest', 'oldest', 'recent', 'earliest', 'most recent']
-        self.functions = ['setup function', 'on function', 'off function', 'feedback function']
+        self.functions = ['setWakeUp function', 'setShower function', 'setRelax function', 'setExercise function']
         self.transaction_words = ['', 'transaction', 'transactions', 'txn', 'txns']
         self.number_words = {
             1: ['one', '1'],
@@ -188,7 +188,7 @@ class TransactionFilterDatasetGenerator:
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(2500)
+dataset = generator.generate_dataset(1000)
 
 # 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))

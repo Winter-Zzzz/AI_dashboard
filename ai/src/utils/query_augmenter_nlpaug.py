@@ -37,13 +37,7 @@ class QueryAugmenterNlpAug:
         """텍스트에서 특정 패턴을 식별하기 위한 정규 표현식 초기화"""
         self.patterns = {
         'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
-        'from': re.compile(r'from\s+(?P<hex>[0-9a-fA-F]{130})'),  # from [hex]
-        'by': re.compile(r'by\s+(?P<hex>[0-9a-fA-F]{130})'),  # by [hex]
-        'to': re.compile(r'to\s+(?P<hex>[0-9a-fA-F]{130})'),  # to [hex]
         'timestamp': re.compile(r'\b(?P<timestamp>\d{10})\b'),
-        'func_name': re.compile(r'\b(setup function|on function|off function|feedback function)\b', re.IGNORECASE),
-        'time_order': re.compile(r'\b(most recent)\b', re.IGNORECASE),
-        'count': re.compile(r'\b(?P<count>all|one|two|three|four|five|six|seven|eight|nine|ten|[1-9]|10)\b', re.IGNORECASE),
         }
 
     def _init_number_variations(self):
@@ -69,18 +63,17 @@ class QueryAugmenterNlpAug:
     def _init_preserved_keywords(self):
         """모델 처리 중 변경하지 말아야 할 키워드와 숫자"""
         self.preserved_keywords = {
-            # 함수 관련
-            '<func_name>setup function</func_name>', '<func_name>on function</func_name>', 
-            '<func_name>off function</func_name>', '<func_name>feedback function</func_name>',
             # 방향 관련
             'to', 'from', 'by'
             # 수량 관련
             'all',
             # 시간 관련
-            'latest', 'oldest', 'earliest', 'recent', '<time_order>most recent</time_order>'
+            'latest', 'oldest', 'earliest', 'recent', 'most'
             'after', 'before',
             # 트랜잭션 관련
             'transaction', 'transactions', 'txns', 'txn'
+            # 함수
+            'function'
         }
         # number_variations의 모든 숫자 표현도 preserved_keywords에 추가
         for variations in self.number_variations.values():
@@ -90,37 +83,18 @@ class QueryAugmenterNlpAug:
         """주어진 키워드가 보존되어야 하는 키워드인지 확인"""
         return (
             word in self.preserved_keywords or
-            any(pattern.match(word) for pattern in [self.patterns[key] for key in ['hex', 'from', 'to', 'timestamp']])
+            any(pattern.match(word) for pattern in [self.patterns[key] for key in ['hex', 'timestamp']])
     ) 
 
     def get_stopwords_from_preserved(self, text: list) -> list:
         """정지어 리스트 추출"""
         stopwords = [word for word in text if self.is_preserved(word)]
         return stopwords
-    
-    def preprocess_text(self, text:str) -> str:
-        """텍스트 전처리"""
-        # 1. time_order 패턴 (most recent 등) 먼저 처리
-        text = self.patterns['time_order'].sub(lambda m: f"<time_order>{m.group()}</time_order>", text)
-        
-        # 2. 그 다음 hex 패턴 (all, 숫자 포함)
-        text = self.patterns['hex'].sub(lambda m: f"<hex>{m.group()}</hex>", text)
-        
-        # 3. function 패턴
-        text = self.patterns['func_name'].sub(lambda m: f"<func_name>{m.group()}</func_name>", text)
-        
-        # 5. timestamp 패턴
-        text = self.patterns['timestamp'].sub(lambda m: f"<timestamp>{m.group()}</timestamp>", text)
-        
-        return text
 
     def initialize_augmenter(self, texts: List[str]):
         """입력된 텍스트 리스트를 사용하여 증강기를 초기화함"""
 
-        # 텍스트 결합 - 입력된 텍스트를 하나로 결합하고 이를 단어 단위로 나눔
-        preprocessed_texts = [self.preprocess_text(text) for text in texts]
-
-        combined_text = " ".join(preprocessed_texts)
+        combined_text = " ".join(texts)
         words = combined_text.split()
 
         # 정지어 생성 
@@ -154,17 +128,6 @@ class QueryAugmenterNlpAug:
             logging.error(f"Failed to initialize augmenters: {str(e)}")
             raise
 
-    def validate_function_keywords(self, text: str) -> bool:
-        """입력 텍스트의 function 키워드 유효성 검사"""
-        # off나 setup이 중복으로 나오는지만 체크
-        words = text.lower().split()
-        off_count = words.count('off')
-        setup_count = words.count('setup')
-        feedback_count = words.count('feedback')
-        
-        # off나 setup이 1번 초과로 나오면 거부
-        return off_count <= 1 and setup_count <= 1 and feedback_count <= 1
-
     def clean_output_text(self, text: str) -> str:
         """증강 데이터에 대한 기본적인 텍스트 정제"""
         # 메서드 체인 사이의 공백 제거
@@ -173,45 +136,41 @@ class QueryAugmenterNlpAug:
         text = re.sub(r'\(\s*', '(', text)
         text = re.sub(r'\s*\)', ')', text)
         return text.strip()
+    
+    def preprocess_text(self, text: str) -> str:
+        """function 단어를 특수 토큰으로 치환"""
+        text = re.sub(r'(\w+)\s+function\b', r'\1_FUNCTION', text)
+        return text
         
-    def filter_augmented_pairs(self, inputs: List[str], outputs: List[str]) -> Tuple[List[str], List[str]]:
-        """증강된 데이터 쌍 필터링"""
-        filtered_inputs = []
-        filtered_outputs = []
-        
-        for input_text, output_text in zip(inputs, outputs):
-            # function 키워드 유효성 검사
-            if self.validate_function_keywords(input_text):
-                cleaned_output = self.clean_output_text(output_text)
-                filtered_inputs.append(input_text)
-                filtered_outputs.append(cleaned_output)
-                
-        return filtered_inputs, filtered_outputs
+    def postprocess_text(self, text: str) -> str:
+        """특수 토큰을 다시 function으로 복원"""
+        text = re.sub(r'(\w+)_FUNCTION\b', r'\1 function', text)
+        return text
     
     def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2, batch_size: int=32) -> Tuple[List[str], List[str]]:
-        """입력 텍스트 변형과 해당 변형에 맞는 출력 텍스트 생성"""
         augmented_inputs = []
         augmented_outputs = []
 
-        # 초기 데이터 정리 및 필터링
-        input_texts, output_texts = self.filter_augmented_pairs(input_texts, output_texts)
-        self.initialize_augmenter(input_texts)
+        # 전처리된 텍스트로 augmenter 초기화
+        preprocessed_texts = [self.preprocess_text(text) for text in input_texts]
+        self.initialize_augmenter(preprocessed_texts)
 
         for i in range(0, len(input_texts), batch_size):
-            batch_inputs = input_texts[i:i + batch_size]
+            batch_inputs = preprocessed_texts[i:i + batch_size]  # 전처리된 텍스트 사용
             batch_outputs = output_texts[i:i + batch_size]
 
             for idx, (input_text, output_text) in enumerate(tqdm(zip(batch_inputs, batch_outputs), 
-                                                                 total=len(batch_inputs),
-                                                                 desc=f"Batch {i//batch_size + 1}/{len(input_texts)//batch_size + 1}")):
+                                                               total=len(batch_inputs),
+                                                               desc=f"Batch {i//batch_size + 1}/{len(input_texts)//batch_size + 1}")):
                 try:
                     for augmenter in self.augmenters:
                         try:
                             variations = augmenter.augment(input_text, n=num_variations)
-
                             for var in variations:
-                                if 'UNK' not in var and self.validate_function_keywords(var):
-                                    augmented_inputs.append(var)
+                                if 'UNK' not in var:
+                                    # 후처리 적용
+                                    processed_var = self.postprocess_text(var)
+                                    augmented_inputs.append(processed_var)
                                     augmented_outputs.append(output_text)
                         except Exception as e:
                             logging.warning(f"Augmentation failed: {str(e)}")
@@ -220,12 +179,12 @@ class QueryAugmenterNlpAug:
                 except Exception as e:
                     logging.error(f"Error at index {idx}: {str(e)}")
                     continue
-                
+        
         unique_pairs = list(dict.fromkeys(zip(augmented_inputs, augmented_outputs)))
         if unique_pairs:
             augmented_inputs, augmented_outputs = zip(*unique_pairs)
             return list(augmented_inputs), list(augmented_outputs)
-        return [],[]
+        return [], []
     
 def save_augmented_data(augmented_inputs: List[str], augmented_outputs: List[str], file_path: str):
     """증강된 데이터를 augmented_dataset.json으로 저장"""

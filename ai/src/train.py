@@ -41,7 +41,8 @@ class QueryDataset(Dataset):
         self.patterns = {
             'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
             'time': re.compile(r'\b\d{10}\b'),
-            # 'func_name': re.compile(r'\b(setup|on|off)\s*\w*\s*function/?\b', re.IGNORECASE)
+            'func': re.compile(r'\b\w+(?=\s+function\b)'),
+
         }
 
     def __len__(self):
@@ -72,28 +73,50 @@ class QueryDataset(Dataset):
             'attention_mask': input_encoding.attention_mask.squeeze(0),
             'labels': target_encoding.input_ids.squeeze(0)
         }
-    
-    @staticmethod
-    def clean_text(text: str) -> str:
-        return text.strip()
-    
-    # @staticmethod
-    # def is_hash(text: str) -> bool:
-    #     """해시값인지 확인 (16진수 130자리)"""
-    #     return bool(re.match(r'^[0-9a-fA-F]{130}$', text))
 
     def process_text(self, text: str) -> str:
-        """텍스트 전처리 - 해시값과 Timestamp 처리"""
+        """텍스트 전처리 - 단어 간 공백 정규화 및 패턴 매칭"""
+        text = ' '.join(text.split())
+        
+        matches_info = []
         for pattern_name, pattern in self.patterns.items():
-            matches = pattern.finditer(text)
-            for match in matches:
-                start, end = match.span()
-                text = (
-                    text[:start] + 
-                    f"<{pattern_name}>{match.group()}</{pattern_name}>" +
-                    text[end:]
-                )
+            for match in pattern.finditer(text):
+                matches_info.append({
+                    'start': match.start(),
+                    'end': match.end(),
+                    'pattern_name': pattern_name,
+                    'matched_text': match.group().strip()
+                })
+        
+        matches_info.sort(key=lambda x: x['start'], reverse=True)
+        
+        for match_info in matches_info:
+            tag_start = f"<{match_info['pattern_name']}>"
+            tag_end = f"</{match_info['pattern_name']}>"
+            tagged_text = f"{tag_start}{match_info['matched_text']}{tag_end}"
+            tagged_text = ''.join(tagged_text.split())
+            
+            
+            text = (
+                text[:match_info['start']] +
+                tagged_text +
+                text[match_info['end']:]
+            )
+        
         return text
+    
+    def remove_special_tokens(text: str) -> str:
+        """<pad>와 </s> 토큰 제거"""
+        return text.replace('<pad>', '').replace('</s>', '').replace('<unk>', '')
+    
+    def remove_all_spaces(text: str) -> str:
+        """모든 종류의 공백 문자 제거"""
+        return ''.join(text.split())
+    
+    def normalize_spaces(text: str) -> str:
+        """연속된 공백을 하나의 공백으로 반환"""
+        return ' '.join(text.split())
+
 
 class TrainingTracker:
     def __init__(self, log_dir):
@@ -188,17 +211,39 @@ def train_model():
         padding_side='right',
         truncation_side='right'
     )
-    tokenizer.pad_token = tokenizer.eos_token
+    
+    basic_words = [
+        'to', 'from', 'by', 'all',
+        'latest', 'oldest', 'earliest', 'recent', 'most recent'
+        'after', 'before',
+    ]
+
+    num_added_base = tokenizer.add_tokens(basic_words)
+    print(f"기본 단어 {num_added_base}개 추가됨")
+
     special_tokens = {
         'additional_special_tokens': [
-            '<hex>','</hex>','<time>','</time>'
+            # 기존 태그들
+            '<hex>', '</hex>', 
+            '<time>', '</time>',
+            '<func>', '</func>',
         ]
     }
     # 특수 토큰 추가
-    num_added_tokens = tokenizer.add_special_tokens(special_tokens)
-    print(f"Added {num_added_tokens} special tokens")
-    print(f"Special tokens: {tokenizer.all_special_tokens}")
+    num_added_special = tokenizer.add_special_tokens(special_tokens)
+    print(f"특수 토큰 {num_added_special}개 추가됨")
 
+    # 4. 토큰 추가 검증
+    print("\n토크나이저 어휘 체크:")
+    test_sentence = "from latest transactions"
+    tokens = tokenizer.encode(test_sentence, add_special_tokens=False)
+    print(f"테스트 문장: {test_sentence}")
+    print(f"토큰화 결과: {tokenizer.convert_ids_to_tokens(tokens)}")
+    print(f"토큰 ID: {tokens}")
+
+    tokenizer.pad_token = tokenizer.eos_token
+
+ 
     # 모델 초기화 및 임베딩 크기 조정
     model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
     model.resize_token_embeddings(len(tokenizer))
@@ -325,11 +370,11 @@ def train_model():
                     )
                     
                     val_examples.append({
-                        'input': QueryDataset.clean_text(tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False)),
-                        'target': QueryDataset.clean_text(tokenizer.decode(batch['labels'][0], skip_special_tokens=False)),
-                        'output': QueryDataset.clean_text(tokenizer.decode(generated[0], skip_special_tokens=False))
+                        'input': QueryDataset.normalize_spaces(QueryDataset.remove_special_tokens(tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False))),
+                        'target': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(tokenizer.decode(batch['labels'][0], skip_special_tokens=False))),
+                        'output': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(tokenizer.decode(generated[0], skip_special_tokens=False)))
                     })
-        
+
         avg_val_loss = total_val_loss / val_steps
         
         # 13. 결과 출력 개선
@@ -340,7 +385,6 @@ def train_model():
         # 검증 예시 출력
         print("\nValidation Examples:")
         for i, example in enumerate(val_examples, 1):
-            print(f"\nExample {i}:")
             print(f"Input: {example['input']}")
             print(f"Target: {example['target']}")
             print(f"Output: {example['output']}")

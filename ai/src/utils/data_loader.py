@@ -2,7 +2,7 @@ import json
 from typing import Tuple, List
 import logging
 import os
-from preprocessing import preprocess_input_text, preprocess_output_text
+from .preprocessing import preprocess_input_text, preprocess_output_text
 
 
 def load_training_data(file_path: str) -> Tuple[List[str], List[str]]:
