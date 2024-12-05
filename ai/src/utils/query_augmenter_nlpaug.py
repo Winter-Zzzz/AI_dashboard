@@ -69,11 +69,11 @@ class QueryAugmenterNlpAug:
             'all',
             # 시간 관련
             'latest', 'oldest', 'earliest', 'recent', 'most'
-            'after', 'before',
+            'after', 'before', 'between'
             # 트랜잭션 관련
             'transaction', 'transactions', 'txns', 'txn'
             # 함수
-            'function'
+            'function', 'functions'
         }
         # number_variations의 모든 숫자 표현도 preserved_keywords에 추가
         for variations in self.number_variations.values():
@@ -138,13 +138,19 @@ class QueryAugmenterNlpAug:
         return text.strip()
     
     def preprocess_text(self, text: str) -> str:
-        """function 단어를 특수 토큰으로 치환"""
+        """function과 most recent를 특수 토큰으로 치환"""
+        # function 처리
         text = re.sub(r'(\w+)\s+function\b', r'\1_FUNCTION', text)
+        # most recent 처리
+        text = re.sub(r'\bmost\s+recent\b', r'_MOST_RECENT', text)
         return text
         
     def postprocess_text(self, text: str) -> str:
-        """특수 토큰을 다시 function으로 복원"""
+        """특수 토큰을 다시 원래 형태로 복원"""
+        # function 복원
         text = re.sub(r'(\w+)_FUNCTION\b', r'\1 function', text)
+        # most recent 복원
+        text = re.sub(r'_MOST_RECENT\b', 'most recent', text)
         return text
     
     def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2, batch_size: int=32) -> Tuple[List[str], List[str]]:

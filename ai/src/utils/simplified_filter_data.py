@@ -58,17 +58,41 @@ class TransactionFilter:
             ]
         return self
 
-    def by_timestamp(self, timestamp_value: int | str = -1, compare_func: Callable = lambda x, y: x > y) -> 'TransactionFilter':
+
+    def before(self, timestamp_value: int | str) -> 'TransactionFilter':
+        """특정 timestamp 이전의 트랜잭션 필터링"""
         if timestamp_value != -1:
             timestamp_datetime = datetime.fromtimestamp(int(timestamp_value))
             self._filtered_data = [
                 transaction for transaction in self._filtered_data
-                if compare_func(
-                    datetime.fromtimestamp(int(transaction['transactions'][0]['timestamp'])),
-                    timestamp_datetime
-                )
+                if datetime.fromtimestamp(int(transaction['transactions'][0]['timestamp'])) < timestamp_datetime
             ]
         return self
+
+    def after(self, timestamp_value: int | str) -> 'TransactionFilter':
+        """특정 timestamp 이후의 트랜잭션 필터링"""
+        if timestamp_value != -1:
+            timestamp_datetime = datetime.fromtimestamp(int(timestamp_value))
+            self._filtered_data = [
+                transaction for transaction in self._filtered_data
+                if datetime.fromtimestamp(int(transaction['transactions'][0]['timestamp'])) > timestamp_datetime
+            ]
+        return self
+
+    def between(self, timestamp1: int | str, timestamp2: int | str) -> 'TransactionFilter':
+        """특정 timestamp 범위 내의 트랜잭션 필터링 (순서 상관없이)"""
+        if timestamp1 == -1 or timestamp2 == -1:
+            return self
+            
+        # timestamp를 정수로 변환
+        t1 = int(timestamp1)
+        t2 = int(timestamp2)
+        
+        # 더 작은 값을 start로, 큰 값을 end로 사용
+        start_timestamp = min(t1, t2)
+        end_timestamp = max(t1, t2)
+        
+        return self.after(start_timestamp).before(end_timestamp)
 
     def by_order(self, order: int = 0) -> 'TransactionFilter':
         """

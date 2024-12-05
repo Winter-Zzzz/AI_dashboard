@@ -2,6 +2,7 @@ import os
 import sys
 import torch
 from tqdm import tqdm
+import random
 
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from torch.optim import AdamW
@@ -211,18 +212,12 @@ def train_model():
         padding_side='right',
         truncation_side='right'
     )
-    
-    basic_words = [
-        'to', 'from', 'by', 'all',
-        'latest', 'oldest', 'earliest', 'recent', 'most recent'
-        'after', 'before',
-    ]
-
-    num_added_base = tokenizer.add_tokens(basic_words)
-    print(f"기본 단어 {num_added_base}개 추가됨")
 
     special_tokens = {
         'additional_special_tokens': [
+            'to', 'from', 'by', 'all',
+            'latest', 'oldest', 'earliest', 'recent', 'most recent',
+            'after', 'before', 'between'
             # 기존 태그들
             '<hex>', '</hex>', 
             '<time>', '</time>',
@@ -299,6 +294,7 @@ def train_model():
 
     print("🚀 Starting training...")
     for epoch in range(config.NUM_EPOCHS):
+        torch.cuda.empty_cache()
         model.train()
         total_train_loss = 0
         train_steps = 0
@@ -345,7 +341,8 @@ def train_model():
         val_examples = []
 
         with torch.no_grad():
-            for batch in val_dataloader:
+            val_batches = list(enumerate(val_dataloader))
+            for batch_idx, batch in val_batches:
                 batch = {k: v.to(device) for k, v in batch.items()}
                 
                 with autocast(device_type='cuda'):
@@ -358,21 +355,25 @@ def train_model():
                 val_steps += 1
 
                 # 검증 예시 저장
-                if len(val_examples) < 1:  # 매 에폭마다 5개 예시만 저장
+                if batch_idx % 10 == 0:  # validation 배치가 있는 경우에만
                     generated = model.generate(
-                        input_ids=batch['input_ids'][:1],
-                        attention_mask=batch['attention_mask'][:1],
-                        max_length=config.MAX_GEN_LENGTH,
-                        num_beams=config.NUM_BEAMS,
-                        length_penalty=config.LENGTH_PENALTY,
-                        no_repeat_ngram_size=config.NO_REPEAT_NGRAM_SIZE,
-                        early_stopping=config.EARLY_STOPPING
+                    input_ids=batch['input_ids'][0:1].to(device),
+                    attention_mask=batch['attention_mask'][0:1].to(device),
+                    max_length=config.MAX_GEN_LENGTH,
+                    num_beams=config.NUM_BEAMS,
+                    length_penalty=config.LENGTH_PENALTY,
+                    no_repeat_ngram_size=config.NO_REPEAT_NGRAM_SIZE,
+                    early_stopping=config.EARLY_STOPPING
                     )
                     
                     val_examples.append({
-                        'input': QueryDataset.normalize_spaces(QueryDataset.remove_special_tokens(tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False))),
-                        'target': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(tokenizer.decode(batch['labels'][0], skip_special_tokens=False))),
-                        'output': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(tokenizer.decode(generated[0], skip_special_tokens=False)))
+                        'batch_idx': batch_idx,
+                        'input': QueryDataset.normalize_spaces(QueryDataset.remove_special_tokens(
+                            tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False))),
+                        'target': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(
+                            tokenizer.decode(batch['labels'][0], skip_special_tokens=False))),
+                        'output': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(
+                            tokenizer.decode(generated[0], skip_special_tokens=False)))
                     })
 
         avg_val_loss = total_val_loss / val_steps
@@ -382,9 +383,10 @@ def train_model():
         print(f"Average Training Loss: {avg_train_loss:.4f}")
         print(f"Average Validation Loss: {avg_val_loss:.4f}")
 
-        # 검증 예시 출력
+        # 검증 예시 출력 - 배치 인덱스 포함
         print("\nValidation Examples:")
-        for i, example in enumerate(val_examples, 1):
+        for example in val_examples:
+            print(f"\nBatch {example['batch_idx']}:")
             print(f"Input: {example['input']}")
             print(f"Target: {example['target']}")
             print(f"Output: {example['output']}")
