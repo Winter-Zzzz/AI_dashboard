@@ -475,35 +475,30 @@ After completing the training process over 20 epoches (as defined in ModelConfig
 ### 1. Training Performance Metrics
 #### Loss Metrics:
 
+The system generates real-time training progress plots showing:
+- Epoch-wise training loss
+- Improvement points highlighted
+- Learning rate scheduling effects
+- Training Progress Plot:
+    - X-axis: Epochs
+    - Y-axis: Loss values
+    - Green dots: Points of improvement
+    - Continuous line: Training loss trend
 
-#### 
-
-    ![training_progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
-
-    The system generates real-time training progress plots showing:
-    - Epoch-wise training loss
-    - Improvement points highlighted
-    - Learning rate scheduling effects
-    - Training Progress Plot:
-        - X-axis: Epochs
-        - Y-axis: Loss values
-        - Green dots: Points of improvement
-        - Continuous line: Training loss trend
-
-    The training progress plot demonstrates strong convergence characteristics:
-    - Initial rapid learning phase with loss dropping from 1.2 to 0.4 in first 2 epochs
-    - Steady improvement phase between epochs 2-10
-    - Fine-tuning phase after epoch 10 with consistent minor improvements
-    - No signs of overfitting (validation loss consistently below training loss)
-    - Smooth convergence curve without significant fluctuations
+The training progress plot demonstrates strong convergence characteristics:
+- Initial rapid learning phase with loss dropping from 1.2 to 0.4 in first 2 epochs
+- Steady improvement phase between epochs 2-10
+- Fine-tuning phase after epoch 10 with consistent minor improvements
+- No signs of overfitting (validation loss consistently below training loss)
+- Smooth convergence curve without significant fluctuations
     
-    ![training_progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
+![training_progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
 
 3. **Model Validation**
 
     Each epoch includes sample validation outputs:
 
-    ![Validation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/validation.png?raw=true)
+    ![Validation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/validation_example.png?raw=true)
 
     The model demonstrates:
     - Correct preservation of query structure
