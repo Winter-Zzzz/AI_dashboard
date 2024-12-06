@@ -25,6 +25,62 @@
       "single_word": false,
       "special": true
     },
+    "235": {
+      "content": "to",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "969": {
+      "content": "by",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "1748": {
+      "content": "all",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "7152": {
+      "content": "from",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "10245": {
+      "content": "after",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "16454": {
+      "content": "earliest",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "26116": {
+      "content": "before",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
     "32000": {
       "content": "<extra_id_99>",
       "lstrip": false,
@@ -826,7 +882,7 @@
       "special": true
     },
     "32100": {
-      "content": "<hex>",
+      "content": "latest",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -834,7 +890,7 @@
       "special": true
     },
     "32101": {
-      "content": "</hex>",
+      "content": "oldest",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -842,7 +898,7 @@
       "special": true
     },
     "32102": {
-      "content": "<time>",
+      "content": "recent",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -850,7 +906,55 @@
       "special": true
     },
     "32103": {
+      "content": "most recent",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "32104": {
+      "content": "between<hex>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "32105": {
+      "content": "</hex>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "32106": {
+      "content": "<time>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "32107": {
       "content": "</time>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "32108": {
+      "content": "<func>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "32109": {
+      "content": "</func>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -859,10 +963,23 @@
     }
   },
   "additional_special_tokens": [
-    "<hex>",
+    "to",
+    "from",
+    "by",
+    "all",
+    "latest",
+    "oldest",
+    "earliest",
+    "recent",
+    "most recent",
+    "after",
+    "before",
+    "between<hex>",
     "</hex>",
     "<time>",
-    "</time>"
+    "</time>",
+    "<func>",
+    "</func>"
   ],
   "clean_up_tokenization_spaces": true,
   "eos_token": "</s>",

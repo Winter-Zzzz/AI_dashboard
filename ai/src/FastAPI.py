@@ -52,7 +52,13 @@ class ModelManager:
             # 특수 토큰 추가
             special_tokens = {
                 'additional_special_tokens': [
-                    '<hex>', '</hex>', '<time>', '</time>'
+                    'to', 'from', 'by', 'all',
+                    'latest', 'oldest', 'earliest', 'recent', 'most recent',
+                    'after', 'before', 'between'
+                    # 기존 태그들
+                    '<hex>', '</hex>', 
+                    '<time>', '</time>',
+                    '<func>', '</func>',
                 ]
             }
             self._tokenizer.add_special_tokens(special_tokens)
@@ -107,8 +113,11 @@ async def query_transactions(query_text: str, dataset: str):
         # inference.py의 함수들을 순차적으로 호출
         generated = generate_code(query_text, model, tokenizer)
         transformed = transform_code(generated)
+        transformed = transformed.replace(" ", "")
         result = execute_code(transformed, dataset_json)
         
+        if result is None:
+            raise HTTPException(status_code=400, detail="쿼리 처리에 실패했습니다.")
         return {
             "status": "success",
             "data": {
