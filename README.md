@@ -55,7 +55,7 @@ Sample augmented format:
 {
     "dataset": [
         {
-            "input": "Load most recent dealings to {pk} from {src_Pk}",
+            "input": "Load most recent txns to {pk} from {src_Pk}",
             "output": "txn.by_pk('{pk}').by_src_pk('{src_Pk}').by_func_name(-1).by_order(1).get_result(1)"
         },
         {
