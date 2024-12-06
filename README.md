@@ -6,9 +6,8 @@
 
 - Dongwook Kim: Dept.of Information Systems dongwook1214@gmail.com
 - Giram Park: Dept.of Information Systems kirammida@hanyang.ac.kr
-- Seoyoon Jung: Dept.of Information Systems yoooonnn@naver.com
-
-- Jisu Sin (Not a student in AI class): Dept.of Information Systems sjsz0811@hanyang.ac.kr
+- Seoyoon Jung: Dept.of Information Systems yoooonnn@hanyang.ac.kr
+- Jisu Shin (SE only): Dept.of Information Systems sjsz0811@hanyang.ac.kr
 
 ## Proposal
 
@@ -23,8 +22,11 @@ This document will detail the AI model development process for AI_dashboard. We 
 Our solution eliminates intermediary-related data corruption risks, improves accessibility for non-technical users, maintains data integrity through blockchain immutability, provides real-time data analysis capabilities, and ensures secure local processing of sensitive information.
 
 ## Datasets
+
 ### 1. `simplified_generated_dataset.json`
+
 A synthetic query-code parallel dataset containing 5000 pairs of natural language transaction queries and their corresponding Python filter code. Each entry consists of:
+
 - Query: Natural langauge query for filtering transactions
 - Code: Corresponding Python code using `TransactionFilter` class
 
@@ -45,6 +47,7 @@ Sample format:
 ```
 
 ### 2. `simplified_augmented_dataset.json`
+
 An augmented version of the query-code dataset using Natural Language Processing (NLP) techniques to increase lingustic diversity while preserving the semantic structure. The augmentation process maintains the original code outputs while varying the natural language queries.
 
 Sample augmented format: 
@@ -64,16 +67,22 @@ Sample augmented format:
 ```
 
 ## Methodology
+
 ### Dataset Generation
+
 The synthetic query-code dataset is generated using `TransactionFilterDatasetGenerator` class with the following parameters and logic.
+
 #### 1. Query Generation Components:
+
 - Commands: `Fetch`, `Get`, `Query`, `Load`, `Read`, `Pull`, `Show`, `List`
 - Sort orders: `recent`, `earliest`, `latest`, `oldest`, `most recent`
 - Random function name: `setAnimal`, `changeColor`, `getCoordinate`, ...
 - Random count: number of transactions (ex. 1, 'one', 2, 'two', ...)
 - Random public key: 130-character hexadecimal strings
 - Random Timestamps: Unix timestamps between 1730780906 and 1800000000
+
 #### 2. Input Query Generation Rules:
+
 - Each query randomly includes combinations of:
     - Target public key (to [pk])
     - Source public key (from, by [src_pk])
@@ -84,6 +93,7 @@ The synthetic query-code dataset is generated using `TransactionFilterDatasetGen
 - At least one filter condition is guranteed for each query
 
 #### 3. Code Generation Logic
+
 - Translates natural language queries into `TransactionFilter` method chains
 - Applies filters in the following order:
     - `.by_pk()` for target public key
@@ -93,12 +103,17 @@ The synthetic query-code dataset is generated using `TransactionFilterDatasetGen
     - `.before()` for transactions before timestamp
     - `.by_order()` for ordering
     - `.get_result()` for transaction count
+
 The dataset generation ensures diverse combination of filtering conditions while maintaining consistent translation patterns between natural language queries and their corresponding Python filter code.
 
 ### Data Augmentation
+
 The dataset is augmented using `QueryAugmenterNlpAug` class to increase lingustic diversity while preserving the semantic structure. The augmentation process includes:
+
 #### 1. Initialization and Preprocessing
+
 The system initializes with several crucial setup steps:
+
 - Downloads required NLTK packages:
     - wordnet
     - averaged_perceptron_tagger
@@ -118,6 +133,7 @@ The system initializes with several crucial setup steps:
 
 #### 2. Preservation Rules:
 The system maintains critical components through careful preservation rules:
+
 - All preserved keywords are automatically added to the stopwords list
 - Special handling for compound terms like "most recent"
 - Preservation of technical identifiers:
@@ -127,8 +143,11 @@ The system maintains critical components through careful preservation rules:
     - Direction indicators
 
 #### 3. Augmentation Techniques:
+
 This system employs three distinct augmentation methods:
+
 ##### WordNet Synonym Substitution
+
 ```python
 naw.SynonymAug(
     aug_src='wordnet',
@@ -146,6 +165,7 @@ naw.SynonymAug(
     - Augmented: "Display two transactions from {hex} after {timestamp}"
 
 ##### BERT Contextual Word Substitution (BERT)
+
 ```python
 naw.ContextualWordEmbsAug(
     model_path='bert-base-uncased',
@@ -165,6 +185,7 @@ naw.ContextualWordEmbsAug(
     - Augmented: "Fetch records to {hex} setup function"
 
 ##### Random Word Swap
+
 ```python
 naw.RandomWordAug(
     action="swap",
@@ -183,19 +204,24 @@ naw.RandomWordAug(
 ![Data Augmentation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/data_augmentation_result.png?raw=true)
 
 #### 4. Processing Pipeline
+
 The augmentation process follows a structured pipeline:
+
 ##### Pre-processing
+
 - Special token handling:
     - Converts "{func_name} function" patterns to "{func_name}_FUNCTION"
     - Transforms "most recent" to "_MOST_RECENT"
 - Applies preservation rules
 
 ##### Batch Processing
+
 - Processees data in batches of 512 entries
 - Applies all three augmentation techniqeus sequentially
 - Maintains progress tracking wit tqdm
 
 ##### Post-processing
+
 - Restores special tokens to original form
 - Performs text cleaning:
     - Removes excess whitespace
@@ -203,19 +229,14 @@ The augmentation process follows a structured pipeline:
     - Normalizes method chains
 
 ##### Quality Control 
+
 - Filters out augmentations containing 'UNK' tokens
 - Removes duplicate input-output pairs
 - Includes comprehensive error handling and logging
 - Validates input and output data types 
 
-##### Input Validation
-- Only one function type (setup/on/off) allowed per query
-- Function keywords must follow pattern: `(off|on|setup) function`
-- Examples:
-  - Valid: "Get setup function data"
-  - Invalid: "Get setup on function data"
-
 #### 5. Data Management
+
 The augmented data is managed through structured file operations:
 - Saves results to JSON format with detailed structure
 - Maintains original-augmented pairs relationship
@@ -226,124 +247,188 @@ The system ensures high-quality augmentation while maintaining data integrity me
 
 
 ### Model Training and Fine-tuning
-Our model architecture is based on the T5 (Text-to-Text Transfer Transformer), specifically configured for the task of translating natural language queries into transaction filter code. The training process incorporates the following specifications:
 
-#### 1. Model Configuration
+Our model training implementation utilizes the Text-to-Text Transfer Transfomrer(T5) architecture, speicifically configured for translating natural language queries into transaction filtering code. Here's a detailed breakdown of our training process:
+
+#### 1. Model Architecture & Configuration
+
 - Base Model: T5-small
-- Maximum Sequence Length: 256 tokens
-- Maximum Generation Length: 256 tokens
-- Training Device: GPU with CUDA support (CPU fallback available)
+- Device: CUDA GPU (with CPU fallback)
+- Model Configuration(`model_config.py`)
 
-#### 2. Token Processing
-- Special Tokens
     ```python
-    [
-        '<hex>',
-        '</hex>',
-        '<time>',
-        '</time>'
-    ]
-    ```
-- Token Embedding Resizing: Accomodates additional special tokens
-- Prefix Space Addition: Right-side padding with EOS token
-- Attention Masking: Handles variable length sequences
+    # Model selection
+    MODEL_NAME = 't5-small'
 
-#### 3. Training Parameters
-- Learning Rate: 5e-5
-- Batch Size: 8 (with gradient accumulation steps of 4)
-- Weight Decay: 0.01
-- Number of Epochs: 30
-- Early Stopping Patience: 7
-- Gradient Clipping: 1.0
-- Gradient Accumulation Steps: 4
+    # Sequence lengths
+    MAX_LENGTH = 256          # Maximum input sequence length
+    MAX_GEN_LENGTH = 256     # Maximum generation length
+
+    # Training hyperparameters
+    BATCH_SIZE = 8
+    LEARNING_RATE = 5e-5
+    WEIGHT_DECAY = 0.01
+    NUM_EPOCHS = 20
+    PATIENCE = 7             # Early stopping patience
+
+    # Generation parameters
+    NUM_BEAMS = 5
+    LENGTH_PENALTY = 1.0
+    NO_REPEAT_NGRAM_SIZE = 0
+
+    # Optimization parameters
+    GRADIENT_CLIP = 1.0
+    ACCUMULATION_STEPS = 4
+    EARLY_STOPPING = True
+    ```
+- Tokenizer Configuration
+    - Maximum sequence length: 256 tokens
+    - Padding side: Right
+    - Truncation side: Right
+    - Speical tokens added
+        - Directional indicators: `to`, `from`, `by`
+        - Temporal indicators: `latest`, `oldest`, `earliest`, etc.
+        - Relational terms: `after`, `before`, `between`
+        - XML-style tags: `<hex>`, `<time>`, `<func>`
+
+#### 2. Dataset Management
+
+- Data Split: 90% training, 10% validation
+- Dataset Class Implementation: `QueryDataset`
+    - Handles text preprocessing
+    - Manages speical token patterns (hex values, timestamps, function names)
+    - Implements length truncation and padding
+- DataLoader Configuration:
+    - Batch size: 8
+    - Training data: shuffled
+    - Validation data: Sequential
+    - Workers: 2 per loader
+    - Pin memory: Enabled for CUDA devices
+
+#### 3. Training Configuration
+
+##### Optimizer
+
+- AdamW
+- Learning rate: 5e-5
+- Weight decay: 0.01
+- Epsilon: 1e-8
+
+##### Scheduler
+
+- Linear schedule with warmup
+- Warmup steps: 10% of total steps
+- Total_steps = num_batches * num_epochs
+
+##### Training Parameters
+
+- Number of epochs: 20
+- Gradient accumulation steps: 4
+- Gradient clipping: 1.0
+- Mixed precision training with GradScaler
+- Early stopping patience: 7 epochs
 
 #### 4. Generation Settings
+
+##### Beam Search Configuration
+
+- Number of beams: 5
+- Length penalty: 1.0
+- No repeat n-gram size: 0
+- Early stopping: Enabled
+
+#### 5. Training Process
+
+The training loop includes several key components:
+
+1. Memory Mangagement
+
+    Clear GPU memory before training
+    ```python
+    torch.cuda.empty_cache()
+    ```
+
+2. Progress Tracking
+
+    ```python
+    progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}")
+    progress_bar.set_postfix({
+        'loss': f'{loss.item() * config.ACCUMULATION_STEPS:.4f}',
+        'lr': f'{scheduler.get_last_lr()[0]:.2e}'
+    })
+    ```
+
+3. Loss Calculation and Optimization
+
+    ```python
+    with autocast(device_type='cuda'):
+    output = model(
+        input_ids=batch['input_ids'].to(device),
+        attention_mask=batch['attention_mask'].to(device), 
+        labels=batch['labels'].to(device)
+    )
+    loss = output.loss / config.ACCUMULATION_STEPS
+    ```
+
+4. Gradient Accumulation
+
+    ```python
+    if (i + 1) % config.ACCUMULATION_STEPS == 0:
+    scaler.unscale_(optimizer)
+    torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
+    scaler.step(optimizer)
+    scaler.update()
+    scheduler.step()
+    optimizer.zero_grad()
+    ```
+5. Validation Process
+
+    - Runs validation after each epoch
+    - Generates sample outputs for quality assessment
+    - Tracks and saves validation examples
+    - Computes validation loss
+
+6. Model Checkpointing
+
+    - Saves best model based on validation loss
+    - Implements early stopping with patience (7 epochs)
+    - Maintains training progress visualization
+
+#### 6. Progress Tracking
+
+The `TrainingTracker` class manages:
+- Loss histroy tracking
+- Progress visualization
+- Training status persistence
+- Best model checkpointing
+
+#### 7. Output Example
+
+Validation outputs are generated and logged in the following format:
+
+![validation_example](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/validation_example.png?raw=true)
+
+The training implementation emphasizes:
+
+- Efficient resource utilization through gradient accumulation (4 steps)
+- Training stability with mixed precision and gradient clipping (1.0)
+- Comprehensive progress monitoring and visualization
+- Robust validation and early stopping mechanisms
+- Optimized beam search generation with configured parameters
+
+The combination of these components ensures effective model training while computational efficiency and output quality. All hyperparameters are centrallized through the ModelConfig class for easy modification and experimentation.
+
+#### 4. Generation Settings
+
 - Beam Search Size: 5
 - Length Penalty: 1.0
 - No Repeat N-gram Size: 0
 - Early Stopping: Enabled
 
-#### 5. Training Process
-- Data Split: 90% training, 10% validation
-- Optimizer: AdamW with linear warmup scheduler
-- Mixed Precision Training: Automatic mixed precision with GradScaler
-- Warmup: 10% of total steps
-- Checkpointing: Saves best model based on validation loss
-- Progress Tracking: Real-time loss monitoring and visualization
-
-#### 6. Implementation Details
-1. **Training Tracker System**
-
-    ```python
-    class TrainingTracker:
-        """
-        Tracks training progress, saves status, and visualizes performance metrics
-        """
-    ```
-    Components:
-    - Real-time loss monitoring
-    - Best model checkpointing
-    - Progress visualization
-    - Training status persistence
-2. **Training Optimization**: Resource Management
-    ```python
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
-    if torch.cuda.is_available():
-        print(f"GPU Name: {torch.cuda.get_device_name(0)}")
-        print(f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.0f}MB")
-    ```
-    Optimization techniques:
-        - GPU acceleration when available
-        - Automoatic memory clearing before training
-        - Mixed precision training with GradScaler
-
-
-
-        - Gradient accumulation (steps=4)
-
-3. **Training Process Control**
-: Early Stopping Implentation
-    ```python
-    if no_improve >= patience:  # patience = 7
-    print("🛑 Early stopping triggered!")
-    break
-    ```
-- Patience-based monitoring (7 epochs)
-- Best model preservation
-- Training efficiency optimization
-
-4. **Performance Monitoring**: Metrics Tracking
-- Training Loss
-    - Batch-level monitoring
-    - Running average calculation
-    - Gradient accumulation adjustments
-- Validationn Process
-    - Per-epoch validation
-    - Best model selection
-    - Early stopping triggers
-
-5. **Stauts Management**
-    ```json
-    {
-        "current_epoch": current,
-        "best_loss": loss_value,
-        "last_train_loss": train_loss,
-        "total_improvements": count
-    }
-    ```
-    ![training_status](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_status.png?raw=true)
-
-6. **Validation Sampling**
-
-Each epoch includes validation output sampling for quality control
-- Input query verification
-- Output code structure validation
-
-The training configuration emphasizes efficiency and performance through the use of gradient accumulation, mixed precision training, and careful hyperparameter selection. The relatively small sequence length of 256 tokens is sufficient for our query-to-code translation task while enabling faster training and inference.
-
 ### Installation and Setup
+
 Follow these steps to set up and run the project:
+
 1. Download Required Model File: [models.safetensors](https://drive.google.com/file/d/186jAWNLmJbB1TuqCvWWg1eY4D7Q3aDW6/view)
 
 2. Place it in the following directory: `ai/models/best_models`
@@ -359,15 +444,19 @@ Follow these steps to set up and run the project:
     ```
 
 ### API Server Implementation
+
 #### FastAPI Server Configuration
+
 - Implements a FastAPI server with CORS middleware enabled
 - Server runs on host "0.0.0.0" and port 8000
 - Allows cross-origin requests from all origins with full method and header access
 
 #### API Endpoints
+
 `/api/query-transactions` (GET)
 
 Response Format:
+
 ```json
 {
     "status": "success",
@@ -380,16 +469,14 @@ Response Format:
 ```
 
 ## Evaluation
-After training for 30 epochs, our model demonstrated robust performance and consistent learning characteristics. Here's a comprehensive analysis of the results.
 
-1. **Training Performances**
-    - Best Loss: 0.00369
-    - Average Training Loss: 0.0054
-    - Average Validation Loss: 0.0043
-    - Total Training Epochs: 30
-   - Total Improvements: 30
+After completing the training process over 20 epoches (as defined in ModelConfig), our model demonstrated robust performance and consistent learning characteristic comprehensive analysis of the results.
 
-2. **Convergence Analysis**
+### 1. Training Performance Metrics
+#### Loss Metrics:
+
+
+#### 
 
     ![training_progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
 

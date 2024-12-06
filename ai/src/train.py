@@ -224,6 +224,7 @@ def train_model():
             '<func>', '</func>',
         ]
     }
+    
     # 특수 토큰 추가
     num_added_special = tokenizer.add_special_tokens(special_tokens)
     print(f"특수 토큰 {num_added_special}개 추가됨")

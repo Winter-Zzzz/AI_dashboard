@@ -139,11 +139,11 @@ def load_json_data(file_path):
         return None
 
 
-# 테스트 데이터 로드
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(PROJECT_ROOT)
-json_path = os.path.join(PROJECT_ROOT, 'test', 'transaction_test.json')
-data = load_json_data(json_path)
+# # 테스트 데이터 로드
+# PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# sys.path.append(PROJECT_ROOT)
+# json_path = os.path.join(PROJECT_ROOT, 'test', 'transaction_test.json')
+# data = load_json_data(json_path)
 
-filter = TransactionFilter(data).reset().by_pk(-1).by_src_pk(-1).by_func_name(-1).by_timestamp(-1).by_order(1).get_result(7)
-print(filter)
+# filter = TransactionFilter(data).reset().by_pk(-1).by_src_pk(-1).by_func_name(-1).by_timestamp(-1).by_order(1).get_result(7)
+# print(filter)
