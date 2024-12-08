@@ -16,7 +16,6 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.append(project_root)
 
-# 이제 utils를 패키지로 import 할 수 있습니다
 from utils.data_loader import load_training_data
 
 

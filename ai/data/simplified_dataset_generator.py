@@ -8,30 +8,30 @@ class TransactionFilterDatasetGenerator:
         self.commands = ['Fetch', 'Get', 'Query', 'Load', 'Read', 'Pull', 'Show', 'List']
         self.orders = ['latest', 'oldest', 'recent', 'earliest', 'most recent']
         self.functions = [
-    'feedback function',
-    'setup function', 
-    'getTemperature function',
-    'setTemperatureMode function',
-    'getDeviceStatus',
-    'getPowerState',
-    'setPowerState',
-    'resetDevice',
-    'getNetworkInfo',
-    'getWiFiStatus',
-    'reconnectNetwork',
-    'updateFirmware',
-    'getHumidity',
-    'getPressure',
-    'getBatteryLevel',
-    'getLastMeasurement',
-    'getSensorHistory',
-    'getSettings',
-    'setMeasurementUnit',
-    'setMeasureInterval',
-    'setAlarmThreshold',
-    'setAnimal',
-    'getCoordinate',
-]
+            'feedback function', 
+            'setup function', 
+            'getTemperature function', 
+            'setTemperatureMode function',
+            'getDeviceStatus function',
+            'getPowerState function',
+            'setPowerState function',
+            'resetDevice function',
+            'getNetworkInfo function',
+            'getWiFiStatus function',
+            'reconnectNetwork function',
+            'updateFirmware function',
+            'getHumidity function',
+            'getPressure function',
+            'getBatteryLevel function',
+            'getLastMeasurement function',
+            'getSensorHistory function',
+            'getSettings function',
+            'setMeasurementUnit function',
+            'setMeasureInterval function',
+            'setAlarmThreshold function',
+            'setAnimal function',
+            'getCoordinate function',
+        ]
         self.transaction_words = ['', 'transaction', 'transactions', 'txn', 'txns']
         self.number_words = {
             1: ['one', '1'],
@@ -302,7 +302,7 @@ class TransactionFilterDatasetGenerator:
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(2500)
+dataset = generator.generate_dataset(5000)
 # dataset = generator.generate_balanced_dataset(5000) 
 
 # 파일 경로 설정
@@ -314,13 +314,71 @@ os.makedirs(os.path.dirname(file_path), exist_ok=True)
 with open(file_path, 'w') as json_file:
     json.dump(dataset, json_file, indent=4)
 
+
 # 데이터셋 통계 출력
+print(f"데이터셋 통계:")
+print(f"- 전체 데이터 수: {len(dataset['dataset'])}\n")
+
+# by_order 통계
 order_0_count = sum(1 for item in dataset['dataset'] if 'by_order(0)' in item['output'])
 order_1_count = sum(1 for item in dataset['dataset'] if 'by_order(1)' in item['output'])
-
-print(f"데이터셋 통계:")
-print(f"- 전체 데이터 수: {len(dataset['dataset'])}")
+print("Order 통계:")
 print(f"- by_order(0) 수: {order_0_count}")
 print(f"- by_order(1) 수: {order_1_count}")
-print(f"- 비율 (0:1): {order_0_count/order_1_count:.2f}")
-print(f"\nJSON 파일이 {file_path}에 저장되었습니다.")
+
+# by_pk 통계
+pk_valid = sum(1 for item in dataset['dataset'] if "by_pk(-1)" not in item['output'])
+pk_default = sum(1 for item in dataset['dataset'] if "by_pk(-1)" in item['output'])
+print("PK 통계:")
+print(f"- 유효한 by_pk 수: {pk_valid}")
+print(f"- 기본값(-1) 수: {pk_default}")
+
+# by_src_pk 통계
+src_pk_valid = sum(1 for item in dataset['dataset'] if "by_src_pk(-1)" not in item['output'])
+src_pk_default = sum(1 for item in dataset['dataset'] if "by_src_pk(-1)" in item['output'])
+print("Source PK 통계:")
+print(f"- 유효한 by_src_pk 수: {src_pk_valid}")
+print(f"- 기본값(-1) 수: {src_pk_default}")
+
+# by_func_name 통계
+func_valid = sum(1 for item in dataset['dataset'] if "by_func_name(-1)" not in item['output'])
+func_default = sum(1 for item in dataset['dataset'] if "by_func_name(-1)" in item['output'])
+print("Function 통계:")
+print(f"- 유효한 by_func_name 수: {func_valid}")
+print(f"- 기본값(-1) 수: {func_default}")
+
+# Timestamp 통계
+between_count = sum(1 for item in dataset['dataset'] if 'between' in item['output'])
+after_count = sum(1 for item in dataset['dataset'] if 'after' in item['output'])
+before_count = sum(1 for item in dataset['dataset'] if 'before' in item['output'])
+no_timestamp = len(dataset['dataset']) - (between_count + after_count + before_count)
+print("Timestamp 통계:")
+print(f"- between 수: {between_count}")
+print(f"- after 수: {after_count}")
+print(f"- before 수: {before_count}")
+print(f"- timestamp 없음: {no_timestamp}\n")
+
+print(f"JSON 파일이 {file_path}에 저장되었습니다.")
+
+
+# 데이터셋 통계:
+# - 전체 데이터 수: 5000
+
+# Order 통계:
+# - by_order(0) 수: 3479
+# - by_order(1) 수: 1521
+# PK 통계:
+# - 유효한 by_pk 수: 2534
+# - 기본값(-1) 수: 2466
+# Source PK 통계:
+# - 유효한 by_src_pk 수: 2743
+# - 기본값(-1) 수: 2257
+# Function 통계:
+# - 유효한 by_func_name 수: 2445
+# - 기본값(-1) 수: 2555
+# Timestamp 통계:
+# - between 수: 1233
+# - after 수: 618
+# - before 수: 636
+# - timestamp 없음: 2513
+

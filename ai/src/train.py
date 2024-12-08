@@ -42,9 +42,10 @@ class QueryDataset(Dataset):
         self.patterns = {
             'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
             'time': re.compile(r'\b\d{10}\b'),
-            'func': re.compile(r'\b\w+(?=\s+function\b)'),
+            'function_call': re.compile(r'\b\w+\s+function\b'),  # 함수 호출 패턴 추가
 
         }
+        self.function_patterns = set()
 
     def __len__(self):
         return len(self.input_texts)
@@ -75,35 +76,37 @@ class QueryDataset(Dataset):
             'labels': target_encoding.input_ids.squeeze(0)
         }
 
-    def process_text(self, text: str) -> str:
-        """텍스트 전처리 - 단어 간 공백 정규화 및 패턴 매칭"""
-        text = ' '.join(text.split())
+    def preprocess_text(self, text: str) -> str:
+        """텍스트 전처리 - 함수 호출 패턴을 특수 토큰으로 변환"""
+        # 함수 호출 패턴 찾기 및 저장
+        function_matches = self.patterns['function_call'].finditer(text)
+        for match in function_matches:
+            self.function_patterns.add(match.group())
+            
+        # function 처리 (전체 패턴을 특수 토큰으로 변환)
+        text = re.sub(
+            r'(\b\w+\s+function\b)', 
+            lambda m: f'<func>{m.group(1)}</func>', 
+            text
+        )
         
-        matches_info = []
+        # 다른 패턴들 처리
         for pattern_name, pattern in self.patterns.items():
-            for match in pattern.finditer(text):
-                matches_info.append({
-                    'start': match.start(),
-                    'end': match.end(),
-                    'pattern_name': pattern_name,
-                    'matched_text': match.group().strip()
-                })
+            if pattern_name != 'function_call':  # function_call은 이미 처리됨
+                matches = pattern.finditer(text)
+                for match in matches:
+                    tag_start = f"<{pattern_name}>"
+                    tag_end = f"</{pattern_name}>"
+                    tagged_text = f"{tag_start}{match.group()}{tag_end}"
+                    text = text[:match.start()] + tagged_text + text[match.end():]
         
-        matches_info.sort(key=lambda x: x['start'], reverse=True)
-        
-        for match_info in matches_info:
-            tag_start = f"<{match_info['pattern_name']}>"
-            tag_end = f"</{match_info['pattern_name']}>"
-            tagged_text = f"{tag_start}{match_info['matched_text']}{tag_end}"
-            tagged_text = ''.join(tagged_text.split())
-            
-            
-            text = (
-                text[:match_info['start']] +
-                tagged_text +
-                text[match_info['end']:]
-            )
-        
+        return self.normalize_spaces(text)
+    
+    def postprocess_text(self, text: str) -> str:
+        """특수 토큰을 원래 형태로 복원"""
+        # function 패턴 복원
+        for func_pattern in self.function_patterns:
+            text = text.replace(f'<func>{func_pattern}</func>', func_pattern)
         return text
     
     def remove_special_tokens(text: str) -> str:
