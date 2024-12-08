@@ -429,7 +429,7 @@ The combination of these components ensures effective model training while compu
 
 Follow these steps to set up and run the project:
 
-1. Download Required Model File: [models.safetensors](https://drive.google.com/file/d/186jAWNLmJbB1TuqCvWWg1eY4D7Q3aDW6/view)
+1. Download Required Model File: [models.safetensors](https://drive.google.com/file/d/1JC8L-BEQPzxPByrW-_M_1jrwgUfg-a-y/view?usp=drive_link)
 
 2. Place it in the following directory: `ai/models/best_models`
 
