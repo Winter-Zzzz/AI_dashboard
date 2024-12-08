@@ -28,7 +28,9 @@ class TransactionFilterDatasetGenerator:
     'getSettings',
     'setMeasurementUnit',
     'setMeasureInterval',
-    'setAlarmThreshold'
+    'setAlarmThreshold',
+    'setAnimal',
+    'getCoordinate',
 ]
         self.transaction_words = ['', 'transaction', 'transactions', 'txn', 'txns']
         self.number_words = {
@@ -78,7 +80,8 @@ class TransactionFilterDatasetGenerator:
         command = random.choice(self.commands)
         transaction_word = random.choice(self.transaction_words)
         count = self.get_random_count() 
-        order = random.choice(self.orders) # if random.choice([True, False]) else None
+        order = random.choice(self.orders) if random.choice([True, False]) else None
+        # order = random.choice(self.orders) # generate_balanced_dataset
         
         # 조건들 기본적으로 설정
         conditions = []
@@ -211,11 +214,11 @@ class TransactionFilterDatasetGenerator:
             
             # count 결정 - 숫자로 변환
             if count == 'all' or (has_plural and count is None):
-                count_value = "-1"
+                count_value = -1
             elif count is None and has_order:
-                count_value = "1"
+                count_value = 1
             elif count is None:
-                count_value = "-1"
+                count_value = -1
             else:
                 # 숫자 단어나 문자열을 실제 숫자로 변환
                 count_value = self.word_to_number(count)
@@ -225,7 +228,7 @@ class TransactionFilterDatasetGenerator:
                 "input": input_text,
                 "output": output_text
             })
-        return dataset
+        return {"dataset": dataset}
     
     def generate_balanced_dataset(self, n=5000):
         """
@@ -299,7 +302,8 @@ class TransactionFilterDatasetGenerator:
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_balanced_dataset(5000)  # 그 다음 균형 맞추기
+dataset = generator.generate_dataset(5000)
+# dataset = generator.generate_balanced_dataset(5000) 
 
 # 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
