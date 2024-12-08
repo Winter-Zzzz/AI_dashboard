@@ -9,7 +9,7 @@ from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import get_linear_schedule_with_warmup
 import re
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from torch.amp import GradScaler, autocast
 import json
 
@@ -21,7 +21,7 @@ os.makedirs(os.path.join(project_root, 'logs'), exist_ok=True)
 os.makedirs(os.path.join(project_root, 'models', 'best_model'), exist_ok=True)
 os.makedirs(os.path.join(project_root, 'data', 'raw'), exist_ok=True)
 
-from src.utils.data_loader import load_training_data
+from utils.data_loader import load_training_data
 from src.config.model_config import ModelConfig
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -399,13 +399,16 @@ def train_model():
             # 전체 state dict를 포함한 체크포인트 저장
             checkpoint = {
                 'model_state_dict': model.state_dict(),
-                'tokenizer_config': tokenizer.get_config_dict(),
+                'tokenizer_vocab': tokenizer.get_vocab(),  # 어휘 저장
+                'tokenizer_special_tokens_map': tokenizer.special_tokens_map,  # 특수 토큰 맵 저장
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'scaler_state_dict': scaler.state_dict(),
                 'epoch': epoch,
                 'loss': avg_val_loss,
             }
+
+
             
             # 모델 가중치와 설정 저장
             output_dir = os.path.join(project_root, 'models', 'best_model')

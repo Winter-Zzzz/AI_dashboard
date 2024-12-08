@@ -177,8 +177,20 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
             
 def main():
     """메인 함수"""
-    config = ModelConfig()  # CodeGeneratorConfig 대신 ModelConfig 사용
-    model_path = os.path.join(PROJECT_ROOT, 'models', 'fine_tuned_model')
+    config = ModelConfig()  # 베이스 모델 이름을 위해 필요
+    model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
+    checkpoint_path = os.path.join(model_path, 'model_checkpoint.pt')
+    
+    # 경로 존재 확인
+    if not os.path.exists(model_path):
+        print(f"모델 디렉토리가 존재하지 않습니다: {model_path}")
+        print("먼저 train.py를 실행하여 모델을 학습해주세요.")
+        return
+        
+    if not os.path.exists(checkpoint_path):
+        print(f"체크포인트 파일이 존재하지 않습니다: {checkpoint_path}")
+        print("먼저 train.py를 실행하여 모델을 학습해주세요.")
+        return
     
     # 테스트 데이터 로드
     json_path = os.path.join(PROJECT_ROOT, 'src', 'test', 'transaction_test.json')
@@ -186,44 +198,27 @@ def main():
     
     try:
         print("학습된 모델을 로딩하는 중...")
-        # 토크나이저 먼저 초기화
-        tokenizer = T5Tokenizer.from_pretrained(
-            model_path,
-            model_max_length=config.MAX_LENGTH,
-            padding_side='right',
-            truncatino_side='right',
-            legacy=False)
         
-        tokenizer.pad_token = tokenizer.eos_token
+        # checkpoint 로드 (weights_only=True로 설정하여 경고 제거)
+        checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=True)
         
-        # 특수 토큰 추가 - train.py와 동일한 토큰들 사용
-        special_tokens = {
-        'additional_special_tokens': [
-            'to', 'from', 'by', 'all',
-            'latest', 'oldest', 'earliest', 'recent', 'most recent',
-            'after', 'before', 'between'
-            # 기존 태그들
-            '<hex>', '</hex>', 
-            '<time>', '</time>',
-            '<func>', '</func>',
-        ]
-    }
-        tokenizer.add_special_tokens(special_tokens)
+        # 토크나이저 로드
+        tokenizer = T5Tokenizer.from_pretrained(model_path)
         
-        # 모델 로드
-        model = T5ForConditionalGeneration.from_pretrained(model_path)
-        
-        # 임베딩 레이어 리사이징 추가
+        # 베이스 모델에서 시작하여 체크포인트 로드
+        model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
         model.resize_token_embeddings(len(tokenizer))
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model = model.to(DEVICE)
         
-        model = model.to(DEVICE)  # DEVICE 대신 device 사용 (상단에서 정의된 것)
-
         print(f"학습된 모델 로딩 완료! (Device: {DEVICE})")
-
+        
         interactive_session(model, tokenizer, data)
 
     except Exception as e:
         print(f"모델 로딩 중 에러 발생: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return
 
 if __name__ == "__main__":

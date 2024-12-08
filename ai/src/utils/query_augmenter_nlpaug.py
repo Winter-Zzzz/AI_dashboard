@@ -12,8 +12,13 @@ import json
 from typing import List
 from tqdm import tqdm
 
-# data_loader.py에서 load_training_data 함수 가져오기 
-from data_loader import load_training_data
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+sys.path.append(project_root)
+
+# 이제 utils를 패키지로 import 할 수 있습니다
+from utils.data_loader import load_training_data
+
 
 class QueryAugmenterNlpAug:
     """입출력 텍스트를 토큰화하여 모델 학습용 데이터셋 생성"""
@@ -36,8 +41,9 @@ class QueryAugmenterNlpAug:
     def _init_patterns(self):
         """텍스트에서 특정 패턴을 식별하기 위한 정규 표현식 초기화"""
         self.patterns = {
-        'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
-        'timestamp': re.compile(r'\b(?P<timestamp>\d{10})\b'),
+            'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
+            'timestamp': re.compile(r'\b(?P<timestamp>\d{10})\b'),
+            'function_call': re.compile(r'\b\w+\s+function\b'),  # 함수 호출 패턴 추가
         }
 
     def _init_number_variations(self):
@@ -64,17 +70,20 @@ class QueryAugmenterNlpAug:
         """모델 처리 중 변경하지 말아야 할 키워드와 숫자"""
         self.preserved_keywords = {
             # 방향 관련
-            'to', 'from', 'by'
+            'to', 'from', 'by',
             # 수량 관련
             'all',
             # 시간 관련
-            'latest', 'oldest', 'earliest', 'recent', 'most'
-            'after', 'before', 'between'
+            'latest', 'oldest', 'earliest', 'recent', 'most recent', 'most',
+            'after', 'before', 'between',
             # 트랜잭션 관련
-            'transaction', 'transactions', 'txns', 'txn'
-            # 함수
-            'function', 'functions'
+            'transaction', 'transactions', 'txns', 'txn',
+            # 함수 관련
+            'function', 'functions',
         }
+        # 전체 function 호출 패턴 저장을 위한 set 추가
+        self.function_patterns = set()
+
         # number_variations의 모든 숫자 표현도 preserved_keywords에 추가
         for variations in self.number_variations.values():
             self.preserved_keywords.update(variations)
@@ -91,42 +100,6 @@ class QueryAugmenterNlpAug:
         stopwords = [word for word in text if self.is_preserved(word)]
         return stopwords
 
-    def initialize_augmenter(self, texts: List[str]):
-        """입력된 텍스트 리스트를 사용하여 증강기를 초기화함"""
-
-        combined_text = " ".join(texts)
-        words = combined_text.split()
-
-        # 정지어 생성 
-        stopwords = self.get_stopwords_from_preserved(words)
-
-        try:
-            self.augmenters = [
-                naw.SynonymAug( # WordNet을 사용해 동의어 치환 수행
-                    aug_src='wordnet',
-                    aug_p=0.2,
-                    aug_min=1,
-                    stopwords=stopwords
-                ),
-                naw.ContextualWordEmbsAug( # BERT 모델을 사용해 문맥에 따라 단어 대체
-                    model_path='bert-base-uncased',
-                    device='cuda',
-                    action="substitute",
-                    aug_p=0.2,
-                    aug_min=1,
-                    stopwords=stopwords
-                ),
-                naw.RandomWordAug( # BERT 모델을 사용해 문맥에 따라 
-                    action="swap",
-                    aug_p=0.3,
-                    aug_min=1,
-                    stopwords=stopwords
-                )
-            ]
-            logging.info("Augmenters initialized successfully")
-        except Exception as e:
-            logging.error(f"Failed to initialize augmenters: {str(e)}")
-            raise
 
     def clean_output_text(self, text: str) -> str:
         """증강 데이터에 대한 기본적인 텍스트 정제"""
@@ -138,21 +111,70 @@ class QueryAugmenterNlpAug:
         return text.strip()
     
     def preprocess_text(self, text: str) -> str:
-        """function과 most recent를 특수 토큰으로 치환"""
-        # function 처리
-        text = re.sub(r'(\w+)\s+function\b', r'\1_FUNCTION', text)
+        """function과 most recent를 특수 토큰으로 치환하고 패턴 저장"""
+        # function 호출 패턴 찾기 및 저장
+        function_matches = self.patterns['function_call'].finditer(text)
+        for match in function_matches:
+            self.function_patterns.add(match.group())  # 전체 패턴 저장
+            
+        # function 처리 (전체 패턴을 특수 토큰으로 변환)
+        text = re.sub(r'(\b\w+\s+function\b)', lambda m: f'FUNC_{hash(m.group(1))}_TOKEN', text)
+        
         # most recent 처리
         text = re.sub(r'\bmost\s+recent\b', r'_MOST_RECENT', text)
         return text
         
     def postprocess_text(self, text: str) -> str:
         """특수 토큰을 다시 원래 형태로 복원"""
-        # function 복원
-        text = re.sub(r'(\w+)_FUNCTION\b', r'\1 function', text)
+        # function 패턴 복원
+        for func_pattern in self.function_patterns:
+            pattern_hash = hash(func_pattern)
+            text = text.replace(f'FUNC_{pattern_hash}_TOKEN', func_pattern)
+            
         # most recent 복원
         text = re.sub(r'_MOST_RECENT\b', 'most recent', text)
         return text
+
     
+    def initialize_augmenter(self, texts: List[str]):
+        """입력된 텍스트 리스트를 사용하여 증강기를 초기화함"""
+        combined_text = " ".join(texts)
+        words = combined_text.split()
+
+        # 정지어 생성 
+        stopwords = self.get_stopwords_from_preserved(words)
+        
+        # function 패턴에서 추출한 전체 토큰들도 stopwords에 추가
+        stopwords.extend([f'FUNC_{hash(pattern)}_TOKEN' for pattern in self.function_patterns])
+
+        try:
+            self.augmenters = [
+                naw.SynonymAug(
+                    aug_src='wordnet',
+                    aug_p=0.1,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.ContextualWordEmbsAug(
+                    model_path='bert-base-uncased',
+                    device='cuda',
+                    action="substitute",
+                    aug_p=0.1,
+                    aug_min=1,
+                    stopwords=stopwords
+                ),
+                naw.RandomWordAug(
+                    action="swap",
+                    aug_p=0.1,
+                    aug_min=1,
+                    stopwords=stopwords
+                )
+            ]
+            logging.info("Augmenters initialized successfully")
+        except Exception as e:
+            logging.error(f"Failed to initialize augmenters: {str(e)}")
+            raise
+
     def augment(self, input_texts: List[str], output_texts: List[str], num_variations: int = 2, batch_size: int=32) -> Tuple[List[str], List[str]]:
         augmented_inputs = []
         augmented_outputs = []
@@ -177,7 +199,7 @@ class QueryAugmenterNlpAug:
                                     # 후처리 적용
                                     processed_var = self.postprocess_text(var)
                                     augmented_inputs.append(processed_var)
-                                    augmented_outputs.append(output_text)
+                                    augmented_outputs.append(self.clean_output_text(output_text))
                         except Exception as e:
                             logging.warning(f"Augmentation failed: {str(e)}")
                             continue
@@ -247,7 +269,7 @@ if __name__ == "__main__":
 
         augmenter = QueryAugmenterNlpAug()
 
-        augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts, 1, 512)
+        augmented_inputs, augmented_outputs = augmenter.augment(input_texts, output_texts, 1, 128)
 
         # 증강된 데이터를 저장
         try:
