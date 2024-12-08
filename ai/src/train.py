@@ -217,7 +217,7 @@ def train_model():
         'additional_special_tokens': [
             'to', 'from', 'by', 'all',
             'latest', 'oldest', 'earliest', 'recent', 'most recent',
-            'after', 'before', 'between'
+            'after', 'before', 'between',
             # 기존 태그들
             '<hex>', '</hex>', 
             '<time>', '</time>',
@@ -396,10 +396,27 @@ def train_model():
         
         if improved:
             print(f"✨ New best loss achieved!")
-            model.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
-            tokenizer.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
+            # 전체 state dict를 포함한 체크포인트 저장
+            checkpoint = {
+                'model_state_dict': model.state_dict(),
+                'tokenizer_config': tokenizer.get_config_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'scaler_state_dict': scaler.state_dict(),
+                'epoch': epoch,
+                'loss': avg_val_loss,
+            }
+            
+            # 모델 가중치와 설정 저장
+            output_dir = os.path.join(project_root, 'models', 'best_model')
+            torch.save(checkpoint, os.path.join(output_dir, 'model_checkpoint.pt'))
+            
+            # 토크나이저와 모델 설정 저장
+            model.config.save_pretrained(output_dir)
+            tokenizer.save_pretrained(output_dir)
+            
+            print(f"Saved checkpoint to {output_dir}")
             no_improve = 0
-            # best_loss = avg_val_loss
         else:
             no_improve += 1
             print(f"No improvement for {no_improve} epochs")

@@ -226,11 +226,80 @@ class TransactionFilterDatasetGenerator:
                 "output": output_text
             })
         return dataset
+    
+    def generate_balanced_dataset(self, n=5000):
+        """
+        처음부터 order(0)과 order(1)이 1:1 비율로 균형잡힌 데이터셋 생성
+        
+        Args:
+            n (int): 생성할 전체 데이터 수 (각 order 타입별로 n/2개씩 생성됨)
+            
+        Returns:
+            dict: 균형잡힌 데이터셋
+        """
+        dataset = []
+        orders_per_type = n // 2
+
+        # order(0) 데이터 생성
+        for _ in range(orders_per_type):
+            command = random.choice(self.commands)
+            transaction_word = random.choice(self.transaction_words)
+            count = self.get_random_count()
+            order = random.choice(["oldest", "earliest"])  # order(0)용 키워드
+            
+            input_text, count = self.generate_input()
+            # order 키워드를 강제로 바꾸기
+            input_text = re.sub(r'\b(latest|recent|earliest|oldest)\b', order, input_text, flags=re.IGNORECASE)
+            if not any(word in input_text.lower() for word in ["oldest", "earliest"]):
+                input_text = f"{order} {input_text}"
+                
+            # output 생성 및 추가
+            input_lower = input_text.lower()
+            has_plural = 'txns' in input_lower or 'transactions' in input_lower
+            if count == 'all' or (has_plural and count is None):
+                count_value = "-1"
+            elif count is None:
+                count_value = "1"
+            else:
+                count_value = self.word_to_number(count)
+                
+            output_text = f"txn{self.generate_output(input_text)}.get_result({count_value})"
+            dataset.append({"input": input_text, "output": output_text})
+
+        # order(1) 데이터 생성
+        for _ in range(orders_per_type):
+            command = random.choice(self.commands)
+            transaction_word = random.choice(self.transaction_words)
+            count = self.get_random_count()
+            order = random.choice(["latest", "most recent", "recent"])  # order(1)용 키워드
+            
+            input_text, count = self.generate_input()
+            # order 키워드를 강제로 바꾸기
+            input_text = re.sub(r'\b(latest|recent|earliest|oldest)\b', order, input_text, flags=re.IGNORECASE)
+            if not any(word in input_text.lower() for word in ["latest", "most recent", "recent"]):
+                input_text = f"{order} {input_text}"
+                
+            # output 생성 및 추가
+            input_lower = input_text.lower()
+            has_plural = 'txns' in input_lower or 'transactions' in input_lower
+            if count == 'all' or (has_plural and count is None):
+                count_value = "-1"
+            elif count is None:
+                count_value = "1"
+            else:
+                count_value = self.word_to_number(count)
+                
+            output_text = f"txn{self.generate_output(input_text)}.get_result({count_value})"
+            dataset.append({"input": input_text, "output": output_text})
+
+        # 데이터셋 섞기
+        random.shuffle(dataset)
+        return {"dataset": dataset}
 
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(5000)
+dataset = generator.generate_balanced_dataset(5000)  # 그 다음 균형 맞추기
 
 # 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -239,6 +308,15 @@ os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
 # JSON 파일로 저장
 with open(file_path, 'w') as json_file:
-    json.dump({"dataset": dataset}, json_file, indent=4)
+    json.dump(dataset, json_file, indent=4)
 
-print(f"JSON 파일이 {file_path}에 저장되었습니다.")
+# 데이터셋 통계 출력
+order_0_count = sum(1 for item in dataset['dataset'] if 'by_order(0)' in item['output'])
+order_1_count = sum(1 for item in dataset['dataset'] if 'by_order(1)' in item['output'])
+
+print(f"데이터셋 통계:")
+print(f"- 전체 데이터 수: {len(dataset['dataset'])}")
+print(f"- by_order(0) 수: {order_0_count}")
+print(f"- by_order(1) 수: {order_1_count}")
+print(f"- 비율 (0:1): {order_0_count/order_1_count:.2f}")
+print(f"\nJSON 파일이 {file_path}에 저장되었습니다.")
