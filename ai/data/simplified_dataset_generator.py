@@ -7,7 +7,29 @@ class TransactionFilterDatasetGenerator:
     def __init__(self):
         self.commands = ['Fetch', 'Get', 'Query', 'Load', 'Read', 'Pull', 'Show', 'List']
         self.orders = ['latest', 'oldest', 'recent', 'earliest', 'most recent']
-        self.functions = ['feedback function', 'setup function', 'getTemperature function', 'setTemperatureMode function']
+        self.functions = [
+    'feedback function',
+    'setup function', 
+    'getTemperature function',
+    'setTemperatureMode function',
+    'getDeviceStatus',
+    'getPowerState',
+    'setPowerState',
+    'resetDevice',
+    'getNetworkInfo',
+    'getWiFiStatus',
+    'reconnectNetwork',
+    'updateFirmware',
+    'getHumidity',
+    'getPressure',
+    'getBatteryLevel',
+    'getLastMeasurement',
+    'getSensorHistory',
+    'getSettings',
+    'setMeasurementUnit',
+    'setMeasureInterval',
+    'setAlarmThreshold'
+]
         self.transaction_words = ['', 'transaction', 'transactions', 'txn', 'txns']
         self.number_words = {
             1: ['one', '1'],
@@ -208,7 +230,7 @@ class TransactionFilterDatasetGenerator:
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(4000)
+dataset = generator.generate_dataset(5000)
 
 # 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))

@@ -243,7 +243,7 @@ return (
         value={inputText}
         onChange={handleInputChange}
         disabled={isLoading}
-        placeholder="Type your transaction query e.g. 'show recent txn from {src_pk}'"
+        placeholder="Type your transaction query, e.g. 'show recent txn from {src_pk}'"
       />
       <button type="submit" style={styles.button} disabled={isLoading}>
         <Send size={20} />

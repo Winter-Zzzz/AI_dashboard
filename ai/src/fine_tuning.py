@@ -166,13 +166,17 @@ class QueryParserFineTuner:
 
     def train(self, train_dataset, eval_dataset):
         """모델 파인튜닝"""
-        output_dir = self.config.OUTPUT_DIR
+        # 현재 시간을 포함한 output 디렉토리 생성
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.join(self.config.OUTPUT_DIR, f"checkpoint_{timestamp}")
+        os.makedirs(output_dir, exist_ok=True)
         
         training_args = TrainingArguments(
-            output_dir=output_dir,
+            output_dir=output_dir,  # 변경된 output_dir 사용
             num_train_epochs=self.config.NUM_EPOCHS,
             per_device_train_batch_size=self.config.BATCH_SIZE,
-            per_device_eval_batch_size=self.config.BATCH_SIZE,  # 평가용 배치 사이즈 추가
+            per_device_eval_batch_size=self.config.BATCH_SIZE,
             learning_rate=self.config.LEARNING_RATE,
             warmup_steps=self.config.WARMUP_STEPS,
             weight_decay=self.config.WEIGHT_DECAY,
@@ -182,8 +186,8 @@ class QueryParserFineTuner:
             eval_steps=self.config.EVAL_STEPS,
             eval_strategy=self.config.EVAL_STRATEGY, 
             load_best_model_at_end=True,
-            metric_for_best_model="eval_loss",  # 최적 모델 선택 기준
-            greater_is_better=False,  # loss는 낮을수록 좋음
+            metric_for_best_model="eval_loss",
+            greater_is_better=False,
             remove_unused_columns=False
         )
 
@@ -191,7 +195,7 @@ class QueryParserFineTuner:
             model=self.model,
             args=training_args,
             train_dataset=train_dataset,
-            eval_dataset=eval_dataset,  # 평가용 데이터셋 추가
+            eval_dataset=eval_dataset,
             tokenizer=self.tokenizer,
         )
 
@@ -239,7 +243,7 @@ def main():
     train_dataset, eval_dataset = tuner.prepare_dataset()
     tuner.train(train_dataset, eval_dataset)
     
-    test_query = "show most recent get function transaction"
+    test_query = "show most recent setup function transaction"
     result = tuner.predict(test_query)
     print(f"Query: {test_query}")
     print(f"Generated code: {result}")

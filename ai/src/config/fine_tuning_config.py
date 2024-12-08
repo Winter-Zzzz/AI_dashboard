@@ -4,7 +4,7 @@ class ModelConfig:
     ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     
     # 모델 설정
-    BASE_MODEL_PATH = os.path.join(ROOT_DIR, "models", "fine_tuned_model")
+    BASE_MODEL_PATH = os.path.join(ROOT_DIR, "models", "best_model")
     MODEL_NAME = "t5-small"  # 폴백용 기본 모델
     USE_BASE_MODEL = True  # 기존 모델 사용 여부
     
