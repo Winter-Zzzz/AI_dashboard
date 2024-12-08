@@ -1,6 +1,10 @@
+import os
 class ModelConfig:
+
+    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    
     # 모델 설정
-    BASE_MODEL_PATH = "ai/models/best_model"  # 기존 학습된 모델 경로
+    BASE_MODEL_PATH = os.path.join(ROOT_DIR, "models", "fine_tuned_model")
     MODEL_NAME = "t5-small"  # 폴백용 기본 모델
     USE_BASE_MODEL = True  # 기존 모델 사용 여부
     
@@ -23,9 +27,9 @@ class ModelConfig:
     EVAL_STRATEGY = "epoch"
     
     # 경로 설정
-    OUTPUT_DIR = "ai/models/fine_tuned_model"
-    LOGGING_DIR = "ai/logs"
-    DATA_PATH = "ai/data/raw/simplified_generated_dataset.json"
+    OUTPUT_DIR = os.path.join(ROOT_DIR, "models", "fine_tuned_model")
+    LOGGING_DIR = os.path.join(ROOT_DIR, "logs")
+    DATA_PATH = os.path.join(ROOT_DIR, "data", "raw", "simplified_generated_dataset.json")
     
     # 패턴 정의
     PATTERNS = {

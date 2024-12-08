@@ -56,7 +56,7 @@ class TransactionFilterDatasetGenerator:
         command = random.choice(self.commands)
         transaction_word = random.choice(self.transaction_words)
         count = self.get_random_count() 
-        order = random.choice(self.orders) if random.choice([True, False]) else None
+        order = random.choice(self.orders) # if random.choice([True, False]) else None
         
         # 조건들 기본적으로 설정
         conditions = []
@@ -208,7 +208,7 @@ class TransactionFilterDatasetGenerator:
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(1000)
+dataset = generator.generate_dataset(4000)
 
 # 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))

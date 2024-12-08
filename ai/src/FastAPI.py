@@ -35,7 +35,7 @@ class ModelManager:
     def _load_model_and_tokenizer(self):
         """모델과 토크나이저를 로드하는 내부 메서드"""
         config = ModelConfig()
-        model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
+        model_path = os.path.join(PROJECT_ROOT, 'models', 'fine_tuned_model')
         
         try:
             # 토크나이저 초기화

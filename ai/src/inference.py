@@ -174,11 +174,11 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
             execute_code(generated_code, data)
         except Exception as e:
             print(f"\n에러 발생: {str(e)}")
-
+            
 def main():
     """메인 함수"""
     config = ModelConfig()  # CodeGeneratorConfig 대신 ModelConfig 사용
-    model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
+    model_path = os.path.join(PROJECT_ROOT, 'models', 'fine_tuned_model')
     
     # 테스트 데이터 로드
     json_path = os.path.join(PROJECT_ROOT, 'src', 'test', 'transaction_test.json')

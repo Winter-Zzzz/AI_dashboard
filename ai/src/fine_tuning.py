@@ -239,7 +239,7 @@ def main():
     train_dataset, eval_dataset = tuner.prepare_dataset()
     tuner.train(train_dataset, eval_dataset)
     
-    test_query = "show get function transactions"
+    test_query = "show most recent get function transaction"
     result = tuner.predict(test_query)
     print(f"Query: {test_query}")
     print(f"Generated code: {result}")
