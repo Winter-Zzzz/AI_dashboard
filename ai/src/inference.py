@@ -17,71 +17,6 @@ sys.path.append(PROJECT_ROOT)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {DEVICE}")
 
-class TextProcessor:
-    def __init__(self):
-        self.patterns = {
-            'hex': re.compile(r'[0-9a-fA-F]{130}'),
-            'time': re.compile(r'\b\d{10}\b'),
-            'func': re.compile(r'\b\w+(?=\s+function\b)')
-        }
-    
-    def process_text(self, text: str) -> str:
-        text = ' '.join(text.split())
-        
-        matches_info = []
-        for pattern_name, pattern in self.patterns.items():
-            for match in pattern.finditer(text):
-                matches_info.append({
-                    'start': match.start(),
-                    'end': match.end(),
-                    'pattern_name': pattern_name,
-                    'matched_text': match.group().strip()
-                })
-        
-        matches_info.sort(key=lambda x: x['start'], reverse=True)
-        
-        for match_info in matches_info:
-            tag_start = f"<{match_info['pattern_name']}>"
-            tag_end = f"</{match_info['pattern_name']}>"
-            tagged_text = f"{tag_start}{match_info['matched_text']}{tag_end}"
-            tagged_text = ''.join(tagged_text.split())
-            
-            text = (
-                text[:match_info['start']] +
-                tagged_text +
-                text[match_info['end']:]
-            )
-        
-        return text
-    
-    def transform_code(self, code: str) -> str:
-        """<pad> </s> 제거 및 공백 처리"""
-        print("Original code:", repr(code))  # 디버그 출력
-        
-        # 기본 클리닝
-        code = code.replace("<pad>", "")
-        code = code.replace("</s>", "")
-        print("After pad removal:", repr(code))  # 디버그 출력
-        
-        # * 주변의 공백 제거
-        code = re.sub(r'\s*\*\s*', '*', code)
-        print("After * space removal:", repr(code))  # 디버그 출력
-        
-        # 따옴표 안의 내용은 보존하면서 공백 제거
-        parts = code.split("'")
-        for i in range(0, len(parts), 2):
-            parts[i] = ''.join(parts[i].split())
-        code = "'".join(parts)
-        print("After general space removal:", repr(code))  # 디버그 출력
-
-
-        # txn. 시작하는 경우 처리
-        if code.startswith("txn."):
-            code = f"txn = TransactionFilter(data).reset()\nresult = {code}\nprint(result)"
-
-        return code
-
-
 def load_json_data(file_path):
     """JSON 파일에서 데이터 로드"""
     try:
@@ -92,15 +27,12 @@ def load_json_data(file_path):
     except Exception as e:
         print(f"데이터 로드 중 에러 발생: {str(e)}")
         return None
-    
-text_processor = TextProcessor()
 
 def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer: T5Tokenizer) -> str:
-    processed_text = text_processor.process_text(input_text)
     config = ModelConfig()
     
     inputs = tokenizer(
-        processed_text, 
+        input_text, 
         return_tensors="pt", 
         max_length=config.MAX_LENGTH,
         padding='max_length',
@@ -122,17 +54,21 @@ def generate_code(input_text: str, model: T5ForConditionalGeneration, tokenizer:
     
     outputs = outputs.cpu()
 
-    generated_code = tokenizer.decode(outputs[0])
+    generated_code = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return generated_code
 
 
 def execute_code(code: str, data: dict):
     """Python 코드 실행 함수"""
     try:
+        # TransactionFilter 관련 코드 전처리
+        if code.startswith("txn."):
+            code = f"txn = TransactionFilter(data).reset()\nresult = {code}\nprint(result)"
+            
         print("\n실행 결과:")
         exec_globals = {
             "data": data,
-            "TransactionFilter": TransactionFilter,  # TransactionFilter 클래스를 실행 환경에 추가
+            "TransactionFilter": TransactionFilter,
             "result": None
         }
         exec(code, exec_globals)
@@ -141,8 +77,16 @@ def execute_code(code: str, data: dict):
         print(f"코드 실행 중 에러 발생: {str(e)}")
         return None
 
-def transform_code(code: str) -> str:
-    return text_processor.transform_code(code)
+def clean_generated_code(text: str) -> str:
+    """생성된 텍스트에서 특수 토큰 제거 및 정리"""
+    # <pad> 토큰 제거
+    text = text.replace("<pad>", "").strip()
+    
+    # 연속된 공백 제거
+    text = " ".join(text.split())
+    
+    return text
+
 
 def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenizer, data: dict = None):
     """대화형 세션 실행"""
@@ -165,7 +109,7 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
             
         try:
             print("\n생성 중...")
-            generated_code = transform_code(generate_code(user_input, model, tokenizer))
+            generated_code = clean_generated_code(generate_code(user_input, model, tokenizer))
             print("\n생성된 코드:")
             print("```python")
             print(generated_code)
