@@ -9,7 +9,7 @@ from urllib.parse import unquote
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.inference import generate_code, transform_code, execute_code 
+from src.inference import generate_code, clean_generated_code, execute_code 
 from config.model_config import ModelConfig
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 import torch
@@ -36,39 +36,28 @@ class ModelManager:
         """모델과 토크나이저를 로드하는 내부 메서드"""
         config = ModelConfig()
         model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
+        checkpoint_path = os.path.join(model_path, 'model_checkpoint.pt')
+
+        if not os.path.exists(model_path):
+            raise Exception(f"모델 디렉토리가 존재하지 않습니다: {model_path}")
+            
+        if not os.path.exists(checkpoint_path):
+            raise Exception(f"체크포인트 파일이 존재하지 않습니다: {checkpoint_path}")
         
         try:
-            # 토크나이저 초기화
-            self._tokenizer = T5Tokenizer.from_pretrained(
-                model_path,
-                model_max_length=config.MAX_LENGTH,
-                padding_side='right',
-                truncation_side='right',
-                legacy=False
-            )
+
+            print("학습된 모델을 로딩하는 중")
+
+            checkpoint = torch.load(checkpoint_path, map_location=self._device, weights_only=True)
+
+            self._tokenizer = T5Tokenizer.from_pretrained(model_path)
             
-            self._tokenizer.pad_token = self._tokenizer.eos_token
-            
-            # 특수 토큰 추가
-            special_tokens = {
-                'additional_special_tokens': [
-                    'to', 'from', 'by', 'all',
-                    'latest', 'oldest', 'earliest', 'recent', 'most recent',
-                    'after', 'before', 'between'
-                    # 기존 태그들
-                    '<hex>', '</hex>', 
-                    '<time>', '</time>',
-                    '<func>', '</func>',
-                ]
-            }
-            self._tokenizer.add_special_tokens(special_tokens)
-            
-            # 모델 로드
-            self._model = T5ForConditionalGeneration.from_pretrained(model_path)
+            self._model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
             self._model.resize_token_embeddings(len(self._tokenizer))
+            self._model.load_state_dict(checkpoint['model_state_dict'])
             self._model = self._model.to(self._device)
             
-            print(f"모델 로딩 완료! (Device: {self._device})")
+            print(f"학습된 모델 로딩 완료! (Device: {self._device})")
             
         except Exception as e:
             print(f"모델 로딩 중 에러 발생: {str(e)}")

@@ -243,7 +243,7 @@ return (
         value={inputText}
         onChange={handleInputChange}
         disabled={isLoading}
-        placeholder="자연어로 트랜잭션을 설명해주세요"
+        placeholder="Type your transaction query, e.g. 'show recent txn from {src_pk}'"
       />
       <button type="submit" style={styles.button} disabled={isLoading}>
         <Send size={20} />

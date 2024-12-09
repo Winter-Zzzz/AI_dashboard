@@ -1,7 +1,4 @@
 {
-  "</func>": 32109,
-  "</hex>": 32105,
-  "</time>": 32107,
   "<extra_id_0>": 32099,
   "<extra_id_10>": 32089,
   "<extra_id_11>": 32088,
@@ -101,12 +98,5 @@
   "<extra_id_97>": 32002,
   "<extra_id_98>": 32001,
   "<extra_id_99>": 32000,
-  "<extra_id_9>": 32090,
-  "<func>": 32108,
-  "<time>": 32106,
-  "between<hex>": 32104,
-  "latest": 32100,
-  "most recent": 32103,
-  "oldest": 32101,
-  "recent": 32102
+  "<extra_id_9>": 32090
 }

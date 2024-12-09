@@ -2,7 +2,7 @@ import os
 import sys
 import torch
 from tqdm import tqdm
-import random
+import hashlib
 
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from torch.optim import AdamW
@@ -21,7 +21,7 @@ os.makedirs(os.path.join(project_root, 'logs'), exist_ok=True)
 os.makedirs(os.path.join(project_root, 'models', 'best_model'), exist_ok=True)
 os.makedirs(os.path.join(project_root, 'data', 'raw'), exist_ok=True)
 
-from src.utils.data_loader import load_training_data
+from utils.data_loader import load_training_data
 from src.config.model_config import ModelConfig
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -39,18 +39,12 @@ class QueryDataset(Dataset):
         self.output_texts = output_texts
         self.tokenizer = tokenizer
         self.max_length = max_length
-        self.patterns = {
-            'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
-            'time': re.compile(r'\b\d{10}\b'),
-            'func': re.compile(r'\b\w+(?=\s+function\b)'),
-
-        }
 
     def __len__(self):
-        return len(self.input_texts)
+            return len(self.input_texts)
 
     def __getitem__(self, idx):
-        input_text = self.process_text(self.input_texts[idx])
+        input_text = self.input_texts[idx]
         output_text = self.output_texts[idx]
 
         input_encoding = self.tokenizer(
@@ -74,46 +68,18 @@ class QueryDataset(Dataset):
             'attention_mask': input_encoding.attention_mask.squeeze(0),
             'labels': target_encoding.input_ids.squeeze(0)
         }
-
-    def process_text(self, text: str) -> str:
-        """텍스트 전처리 - 단어 간 공백 정규화 및 패턴 매칭"""
-        text = ' '.join(text.split())
-        
-        matches_info = []
-        for pattern_name, pattern in self.patterns.items():
-            for match in pattern.finditer(text):
-                matches_info.append({
-                    'start': match.start(),
-                    'end': match.end(),
-                    'pattern_name': pattern_name,
-                    'matched_text': match.group().strip()
-                })
-        
-        matches_info.sort(key=lambda x: x['start'], reverse=True)
-        
-        for match_info in matches_info:
-            tag_start = f"<{match_info['pattern_name']}>"
-            tag_end = f"</{match_info['pattern_name']}>"
-            tagged_text = f"{tag_start}{match_info['matched_text']}{tag_end}"
-            tagged_text = ''.join(tagged_text.split())
-            
-            
-            text = (
-                text[:match_info['start']] +
-                tagged_text +
-                text[match_info['end']:]
-            )
-        
-        return text
     
+    @staticmethod
     def remove_special_tokens(text: str) -> str:
         """<pad>와 </s> 토큰 제거"""
         return text.replace('<pad>', '').replace('</s>', '').replace('<unk>', '')
     
+    @staticmethod
     def remove_all_spaces(text: str) -> str:
         """모든 종류의 공백 문자 제거"""
         return ''.join(text.split())
     
+    @staticmethod
     def normalize_spaces(text: str) -> str:
         """연속된 공백을 하나의 공백으로 반환"""
         return ' '.join(text.split())
@@ -212,30 +178,6 @@ def train_model():
         padding_side='right',
         truncation_side='right'
     )
-
-    special_tokens = {
-        'additional_special_tokens': [
-            'to', 'from', 'by', 'all',
-            'latest', 'oldest', 'earliest', 'recent', 'most recent',
-            'after', 'before', 'between'
-            # 기존 태그들
-            '<hex>', '</hex>', 
-            '<time>', '</time>',
-            '<func>', '</func>',
-        ]
-    }
-    
-    # 특수 토큰 추가
-    num_added_special = tokenizer.add_special_tokens(special_tokens)
-    print(f"특수 토큰 {num_added_special}개 추가됨")
-
-    # 4. 토큰 추가 검증
-    print("\n토크나이저 어휘 체크:")
-    test_sentence = "from latest transactions"
-    tokens = tokenizer.encode(test_sentence, add_special_tokens=False)
-    print(f"테스트 문장: {test_sentence}")
-    print(f"토큰화 결과: {tokenizer.convert_ids_to_tokens(tokens)}")
-    print(f"토큰 ID: {tokens}")
 
     tokenizer.pad_token = tokenizer.eos_token
 
@@ -369,13 +311,12 @@ def train_model():
                     
                     val_examples.append({
                         'batch_idx': batch_idx,
-                        'input': QueryDataset.normalize_spaces(QueryDataset.remove_special_tokens(
-                            tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False))),
-                        'target': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(
-                            tokenizer.decode(batch['labels'][0], skip_special_tokens=False))),
-                        'output': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(
-                            tokenizer.decode(generated[0], skip_special_tokens=False)))
-                    })
+                        'input': QueryDataset.normalize_spaces(tokenizer.decode(batch['input_ids'][0], skip_special_tokens=True)),
+                        'target': QueryDataset.remove_all_spaces(
+                            tokenizer.decode(batch['labels'][0], skip_special_tokens=True)),
+                        'output': QueryDataset.remove_all_spaces(
+                            tokenizer.decode(generated[0], skip_special_tokens=True)
+                        )})
 
         avg_val_loss = total_val_loss / val_steps
         
@@ -396,10 +337,30 @@ def train_model():
         
         if improved:
             print(f"✨ New best loss achieved!")
-            model.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
-            tokenizer.save_pretrained(os.path.join(project_root, 'models', 'best_model'))
+            # 전체 state dict를 포함한 체크포인트 저장
+            checkpoint = {
+                'model_state_dict': model.state_dict(),
+                'tokenizer_vocab': tokenizer.get_vocab(),  # 어휘 저장
+                'tokenizer_special_tokens_map': tokenizer.special_tokens_map,  # 특수 토큰 맵 저장
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'scaler_state_dict': scaler.state_dict(),
+                'epoch': epoch,
+                'loss': avg_val_loss,
+            }
+
+
+            
+            # 모델 가중치와 설정 저장
+            output_dir = os.path.join(project_root, 'models', 'best_model')
+            torch.save(checkpoint, os.path.join(output_dir, 'model_checkpoint.pt'))
+            
+            # 토크나이저와 모델 설정 저장
+            model.config.save_pretrained(output_dir)
+            tokenizer.save_pretrained(output_dir)
+            
+            print(f"Saved checkpoint to {output_dir}")
             no_improve = 0
-            # best_loss = avg_val_loss
         else:
             no_improve += 1
             print(f"No improvement for {no_improve} epochs")

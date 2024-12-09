@@ -7,7 +7,31 @@ class TransactionFilterDatasetGenerator:
     def __init__(self):
         self.commands = ['Fetch', 'Get', 'Query', 'Load', 'Read', 'Pull', 'Show', 'List']
         self.orders = ['latest', 'oldest', 'recent', 'earliest', 'most recent']
-        self.functions = ['feedback function', 'setup function', 'getTemperature function', 'setTemperatureMode function']
+        self.functions = [
+            'feedback function', 
+            'setup function', 
+            'getTemperature function', 
+            'setTemperatureMode function',
+            'getDeviceStatus function',
+            'getPowerState function',
+            'setPowerState function',
+            'resetDevice function',
+            'getNetworkInfo function',
+            'getWiFiStatus function',
+            'reconnectNetwork function',
+            'updateFirmware function',
+            'getHumidity function',
+            'getPressure function',
+            'getBatteryLevel function',
+            'getLastMeasurement function',
+            'getSensorHistory function',
+            'getSettings function',
+            'setMeasurementUnit function',
+            'setMeasureInterval function',
+            'setAlarmThreshold function',
+            'setAnimal function',
+            'getCoordinate function',
+        ]
         self.transaction_words = ['', 'transaction', 'transactions', 'txn', 'txns']
         self.number_words = {
             1: ['one', '1'],
@@ -57,6 +81,7 @@ class TransactionFilterDatasetGenerator:
         transaction_word = random.choice(self.transaction_words)
         count = self.get_random_count() 
         order = random.choice(self.orders) if random.choice([True, False]) else None
+        # order = random.choice(self.orders) # generate_balanced_dataset
         
         # 조건들 기본적으로 설정
         conditions = []
@@ -189,11 +214,11 @@ class TransactionFilterDatasetGenerator:
             
             # count 결정 - 숫자로 변환
             if count == 'all' or (has_plural and count is None):
-                count_value = "-1"
+                count_value = -1
             elif count is None and has_order:
-                count_value = "1"
+                count_value = 1
             elif count is None:
-                count_value = "-1"
+                count_value = -1
             else:
                 # 숫자 단어나 문자열을 실제 숫자로 변환
                 count_value = self.word_to_number(count)
@@ -203,12 +228,82 @@ class TransactionFilterDatasetGenerator:
                 "input": input_text,
                 "output": output_text
             })
-        return dataset
+        return {"dataset": dataset}
+    
+    def generate_balanced_dataset(self, n=5000):
+        """
+        처음부터 order(0)과 order(1)이 1:1 비율로 균형잡힌 데이터셋 생성
+        
+        Args:
+            n (int): 생성할 전체 데이터 수 (각 order 타입별로 n/2개씩 생성됨)
+            
+        Returns:
+            dict: 균형잡힌 데이터셋
+        """
+        dataset = []
+        orders_per_type = n // 2
+
+        # order(0) 데이터 생성
+        for _ in range(orders_per_type):
+            command = random.choice(self.commands)
+            transaction_word = random.choice(self.transaction_words)
+            count = self.get_random_count()
+            order = random.choice(["oldest", "earliest"])  # order(0)용 키워드
+            
+            input_text, count = self.generate_input()
+            # order 키워드를 강제로 바꾸기
+            input_text = re.sub(r'\b(latest|recent|earliest|oldest)\b', order, input_text, flags=re.IGNORECASE)
+            if not any(word in input_text.lower() for word in ["oldest", "earliest"]):
+                input_text = f"{order} {input_text}"
+                
+            # output 생성 및 추가
+            input_lower = input_text.lower()
+            has_plural = 'txns' in input_lower or 'transactions' in input_lower
+            if count == 'all' or (has_plural and count is None):
+                count_value = "-1"
+            elif count is None:
+                count_value = "1"
+            else:
+                count_value = self.word_to_number(count)
+                
+            output_text = f"txn{self.generate_output(input_text)}.get_result({count_value})"
+            dataset.append({"input": input_text, "output": output_text})
+
+        # order(1) 데이터 생성
+        for _ in range(orders_per_type):
+            command = random.choice(self.commands)
+            transaction_word = random.choice(self.transaction_words)
+            count = self.get_random_count()
+            order = random.choice(["latest", "most recent", "recent"])  # order(1)용 키워드
+            
+            input_text, count = self.generate_input()
+            # order 키워드를 강제로 바꾸기
+            input_text = re.sub(r'\b(latest|recent|earliest|oldest)\b', order, input_text, flags=re.IGNORECASE)
+            if not any(word in input_text.lower() for word in ["latest", "most recent", "recent"]):
+                input_text = f"{order} {input_text}"
+                
+            # output 생성 및 추가
+            input_lower = input_text.lower()
+            has_plural = 'txns' in input_lower or 'transactions' in input_lower
+            if count == 'all' or (has_plural and count is None):
+                count_value = "-1"
+            elif count is None:
+                count_value = "1"
+            else:
+                count_value = self.word_to_number(count)
+                
+            output_text = f"txn{self.generate_output(input_text)}.get_result({count_value})"
+            dataset.append({"input": input_text, "output": output_text})
+
+        # 데이터셋 섞기
+        random.shuffle(dataset)
+        return {"dataset": dataset}
 
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(1000)
+dataset = generator.generate_dataset(10000)
+# dataset = generator.generate_balanced_dataset(5000) 
 
 # 파일 경로 설정
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -217,6 +312,73 @@ os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
 # JSON 파일로 저장
 with open(file_path, 'w') as json_file:
-    json.dump({"dataset": dataset}, json_file, indent=4)
+    json.dump(dataset, json_file, indent=4)
+
+
+# 데이터셋 통계 출력
+print(f"데이터셋 통계:")
+print(f"- 전체 데이터 수: {len(dataset['dataset'])}\n")
+
+# by_order 통계
+order_0_count = sum(1 for item in dataset['dataset'] if 'by_order(0)' in item['output'])
+order_1_count = sum(1 for item in dataset['dataset'] if 'by_order(1)' in item['output'])
+print("Order 통계:")
+print(f"- by_order(0) 수: {order_0_count}")
+print(f"- by_order(1) 수: {order_1_count}")
+
+# by_pk 통계
+pk_valid = sum(1 for item in dataset['dataset'] if "by_pk(-1)" not in item['output'])
+pk_default = sum(1 for item in dataset['dataset'] if "by_pk(-1)" in item['output'])
+print("PK 통계:")
+print(f"- 유효한 by_pk 수: {pk_valid}")
+print(f"- 기본값(-1) 수: {pk_default}")
+
+# by_src_pk 통계
+src_pk_valid = sum(1 for item in dataset['dataset'] if "by_src_pk(-1)" not in item['output'])
+src_pk_default = sum(1 for item in dataset['dataset'] if "by_src_pk(-1)" in item['output'])
+print("Source PK 통계:")
+print(f"- 유효한 by_src_pk 수: {src_pk_valid}")
+print(f"- 기본값(-1) 수: {src_pk_default}")
+
+# by_func_name 통계
+func_valid = sum(1 for item in dataset['dataset'] if "by_func_name(-1)" not in item['output'])
+func_default = sum(1 for item in dataset['dataset'] if "by_func_name(-1)" in item['output'])
+print("Function 통계:")
+print(f"- 유효한 by_func_name 수: {func_valid}")
+print(f"- 기본값(-1) 수: {func_default}")
+
+# Timestamp 통계
+between_count = sum(1 for item in dataset['dataset'] if 'between' in item['output'])
+after_count = sum(1 for item in dataset['dataset'] if 'after' in item['output'])
+before_count = sum(1 for item in dataset['dataset'] if 'before' in item['output'])
+no_timestamp = len(dataset['dataset']) - (between_count + after_count + before_count)
+print("Timestamp 통계:")
+print(f"- between 수: {between_count}")
+print(f"- after 수: {after_count}")
+print(f"- before 수: {before_count}")
+print(f"- timestamp 없음: {no_timestamp}\n")
 
 print(f"JSON 파일이 {file_path}에 저장되었습니다.")
+
+
+# 데이터셋 통계:
+# - 전체 데이터 수: 5000
+
+# Order 통계:
+# - by_order(0) 수: 3479
+# - by_order(1) 수: 1521
+# PK 통계:
+# - 유효한 by_pk 수: 2534
+# - 기본값(-1) 수: 2466
+# Source PK 통계:
+# - 유효한 by_src_pk 수: 2743
+# - 기본값(-1) 수: 2257
+# Function 통계:
+# - 유효한 by_func_name 수: 2445
+# - 기본값(-1) 수: 2555
+# Timestamp 통계:
+# - between 수: 1233
+# - after 수: 618
+# - before 수: 636
+# - timestamp 없음: 2513
+

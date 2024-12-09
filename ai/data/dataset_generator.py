@@ -104,7 +104,7 @@ class TransactionFilterDatasetGenerator:
 
 
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(1000)
+dataset = generator.generate_dataset(5000)
 generated_dataset = {
     "dataset": dataset
 }

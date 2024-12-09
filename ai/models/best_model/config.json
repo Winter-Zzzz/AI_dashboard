@@ -1,4 +1,5 @@
 {
+  "_attn_implementation_autoset": true,
   "_name_or_path": "t5-small",
   "architectures": [
     "T5ForConditionalGeneration"
@@ -54,8 +55,7 @@
       "prefix": "translate English to Romanian: "
     }
   },
-  "torch_dtype": "float32",
-  "transformers_version": "4.46.2",
+  "transformers_version": "4.46.3",
   "use_cache": true,
-  "vocab_size": 32110
+  "vocab_size": 32100
 }
