@@ -302,7 +302,7 @@ class TransactionFilterDatasetGenerator:
 
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(5000)
+dataset = generator.generate_dataset(10000)
 # dataset = generator.generate_balanced_dataset(5000) 
 
 # 파일 경로 설정

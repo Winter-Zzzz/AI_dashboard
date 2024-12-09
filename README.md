@@ -122,10 +122,12 @@ The system initializes with several crucial setup steps:
 - Initializes regex patterns for identifying:
     - 130-character hexadecimal values
     - Unix timestamps (10-digit numbers)
+    - Function calls (e.g., "setup function")
+    - Special phrases (e.g., "most recent")
     - Number variations and their text representation
 - Sets up preserved keywords including:
     - Directional terms (`to`, `from`, `by`)
-    - Quantifiers (`all`)
+    - Quantifiers (`all`, `transactions`, `txns`)
     - Temporal indicators (`latest`, `oldest`, `earliest`, `recent`, `most recent`)
     - Time relations (`after`, `before`, `between`)
     - Transaction-related terms (`transaction`, `transactions`, `txns`, `txn`)
@@ -135,7 +137,9 @@ The system initializes with several crucial setup steps:
 The system maintains critical components through careful preservation rules:
 
 - All preserved keywords are automatically added to the stopwords list
-- Special handling for compound terms like "most recent"
+- Special preprocessing for:
+    - "most recent" phrases
+    - Function call patterns (e.g., "setup function")
 - Preservation of technical identifiers:
     - Hexadecimal values
     - Timestamps
@@ -151,13 +155,13 @@ This system employs three distinct augmentation methods:
 ```python
 naw.SynonymAug(
     aug_src='wordnet',
-    aug_p=0.2,
+    aug_p=0.1,
     aug_min=1,
     stopwords=stopwords
 )
 ```
 - Replaces words with semantically similar alternatives
-- 20% probability of word replacement
+- 10% probability of word replacement
 - Minimum one word augmentation
 - Preserved stopwords and critical terms
 - Examples:
@@ -171,13 +175,13 @@ naw.ContextualWordEmbsAug(
     model_path='bert-base-uncased',
     device='cuda',
     action="substitute",
-    aug_p=0.2,
+    aug_p=0.1,
     aug_min=1,
     stopwords=stopwords
 )
 ```
 - Uses BERT model for context-aware replacements
-- 20% substitution probability
+- 10% substitution probability
 - Runs on CUDA for improved performance
 - Maintains contextual relevance
 - Examples:
@@ -189,13 +193,13 @@ naw.ContextualWordEmbsAug(
 ```python
 naw.RandomWordAug(
     action="swap",
-    aug_p=0.3,
+    aug_p=0.1,
     aug_min=1,
     stopwords=stopwords
 )
 ```
 - Creates syntactic variations through controlled word swapping
-- 30% swap probability
+- 10% swap probability
 - Preserves critical structure and stopwords
 - Examples:
     - Original: "Query recent transactions from {hex}"
@@ -210,19 +214,22 @@ The augmentation process follows a structured pipeline:
 ##### Pre-processing
 
 - Special token handling:
-    - Converts "{func_name} function" patterns to "{func_name}_FUNCTION"
-    - Transforms "most recent" to "_MOST_RECENT"
+    - Converts function patterns to special tokens (e.g., "FUNC_{hash}_TOKEN")
+    - Transforms "most recent" to "MOST_RECENT_TOKEN"
 - Applies preservation rules
 
 ##### Batch Processing
 
-- Processees data in batches of 512 entries
-- Applies all three augmentation techniqeus sequentially
-- Maintains progress tracking wit tqdm
+- Processes data in batches (default: 32 entries)
+- Applies all three augmentation techniques sequentially
+- Maintains progress tracking with tqdm
+- Generates specified number of variations per input (default: 2)
 
 ##### Post-processing
 
-- Restores special tokens to original form
+- Restores special tokens to original form:
+    - Function patterns
+    - "most recent" phrases
 - Performs text cleaning:
     - Removes excess whitespace
     - Standardizes punctuation spacing

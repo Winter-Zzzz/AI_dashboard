@@ -2,14 +2,14 @@ import os
 import sys
 import torch
 from tqdm import tqdm
-import random
+import hashlib
 
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import get_linear_schedule_with_warmup
 import re
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from torch.amp import GradScaler, autocast
 import json
 
@@ -39,19 +39,12 @@ class QueryDataset(Dataset):
         self.output_texts = output_texts
         self.tokenizer = tokenizer
         self.max_length = max_length
-        self.patterns = {
-            'hex': re.compile(r'[0-9a-fA-F]{130}'),  # 130자리 16진수 값
-            'time': re.compile(r'\b\d{10}\b'),
-            'function_call': re.compile(r'\b\w+\s+function\b'),  # 함수 호출 패턴 추가
-
-        }
-        self.function_patterns = set()
 
     def __len__(self):
-        return len(self.input_texts)
+            return len(self.input_texts)
 
     def __getitem__(self, idx):
-        input_text = self.process_text(self.input_texts[idx])
+        input_text = self.input_texts[idx]
         output_text = self.output_texts[idx]
 
         input_encoding = self.tokenizer(
@@ -75,48 +68,18 @@ class QueryDataset(Dataset):
             'attention_mask': input_encoding.attention_mask.squeeze(0),
             'labels': target_encoding.input_ids.squeeze(0)
         }
-
-    def preprocess_text(self, text: str) -> str:
-        """텍스트 전처리 - 함수 호출 패턴을 특수 토큰으로 변환"""
-        # 함수 호출 패턴 찾기 및 저장
-        function_matches = self.patterns['function_call'].finditer(text)
-        for match in function_matches:
-            self.function_patterns.add(match.group())
-            
-        # function 처리 (전체 패턴을 특수 토큰으로 변환)
-        text = re.sub(
-            r'(\b\w+\s+function\b)', 
-            lambda m: f'<func>{m.group(1)}</func>', 
-            text
-        )
-        
-        # 다른 패턴들 처리
-        for pattern_name, pattern in self.patterns.items():
-            if pattern_name != 'function_call':  # function_call은 이미 처리됨
-                matches = pattern.finditer(text)
-                for match in matches:
-                    tag_start = f"<{pattern_name}>"
-                    tag_end = f"</{pattern_name}>"
-                    tagged_text = f"{tag_start}{match.group()}{tag_end}"
-                    text = text[:match.start()] + tagged_text + text[match.end():]
-        
-        return self.normalize_spaces(text)
     
-    def postprocess_text(self, text: str) -> str:
-        """특수 토큰을 원래 형태로 복원"""
-        # function 패턴 복원
-        for func_pattern in self.function_patterns:
-            text = text.replace(f'<func>{func_pattern}</func>', func_pattern)
-        return text
-    
+    @staticmethod
     def remove_special_tokens(text: str) -> str:
         """<pad>와 </s> 토큰 제거"""
         return text.replace('<pad>', '').replace('</s>', '').replace('<unk>', '')
     
+    @staticmethod
     def remove_all_spaces(text: str) -> str:
         """모든 종류의 공백 문자 제거"""
         return ''.join(text.split())
     
+    @staticmethod
     def normalize_spaces(text: str) -> str:
         """연속된 공백을 하나의 공백으로 반환"""
         return ' '.join(text.split())
@@ -215,30 +178,6 @@ def train_model():
         padding_side='right',
         truncation_side='right'
     )
-
-    special_tokens = {
-        'additional_special_tokens': [
-            'to', 'from', 'by', 'all',
-            'latest', 'oldest', 'earliest', 'recent', 'most recent',
-            'after', 'before', 'between',
-            # 기존 태그들
-            '<hex>', '</hex>', 
-            '<time>', '</time>',
-            '<func>', '</func>',
-        ]
-    }
-    
-    # 특수 토큰 추가
-    num_added_special = tokenizer.add_special_tokens(special_tokens)
-    print(f"특수 토큰 {num_added_special}개 추가됨")
-
-    # 4. 토큰 추가 검증
-    print("\n토크나이저 어휘 체크:")
-    test_sentence = "from latest transactions"
-    tokens = tokenizer.encode(test_sentence, add_special_tokens=False)
-    print(f"테스트 문장: {test_sentence}")
-    print(f"토큰화 결과: {tokenizer.convert_ids_to_tokens(tokens)}")
-    print(f"토큰 ID: {tokens}")
 
     tokenizer.pad_token = tokenizer.eos_token
 
@@ -372,13 +311,12 @@ def train_model():
                     
                     val_examples.append({
                         'batch_idx': batch_idx,
-                        'input': QueryDataset.normalize_spaces(QueryDataset.remove_special_tokens(
-                            tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False))),
-                        'target': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(
-                            tokenizer.decode(batch['labels'][0], skip_special_tokens=False))),
-                        'output': QueryDataset.remove_all_spaces(QueryDataset.remove_special_tokens(
-                            tokenizer.decode(generated[0], skip_special_tokens=False)))
-                    })
+                        'input': QueryDataset.normalize_spaces(tokenizer.decode(batch['input_ids'][0], skip_special_tokens=True)),
+                        'target': QueryDataset.remove_all_spaces(
+                            tokenizer.decode(batch['labels'][0], skip_special_tokens=True)),
+                        'output': QueryDataset.remove_all_spaces(
+                            tokenizer.decode(generated[0], skip_special_tokens=True)
+                        )})
 
         avg_val_loss = total_val_loss / val_steps
         
