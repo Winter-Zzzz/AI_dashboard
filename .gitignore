@@ -22,3 +22,4 @@ ai/models/best_model/model.safetensors
 # Ignore all checkpoint folders in fine_tuned_model except the specified ones
 ai/models/fine_tuned_model/checkpoint-*/
 ai/models/fine_tuned_model/model.safetensors
+ai/models/best_model/model_checkpoint.pt
