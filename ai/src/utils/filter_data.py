@@ -122,5 +122,5 @@ sys.path.append(PROJECT_ROOT)
 json_path = os.path.join(PROJECT_ROOT, 'test', 'transaction_test.json')
 data = load_json_data(json_path)
 
-filter = TransactionFilter(data).reset().by_pk('04fcc1da3dc60d7e4e4c987022c9f08f20b2e9b16df6cd6bcb9b1251021b018260d603df7809991b9e21ee0263f92dad29fd2f1de56851ab62b2ecb410db0389a0').by_src_pk(-1).by_func_name(-1).by_timestamp(-1).sort(1).get_result(-1)
+filter = TransactionFilter(data).reset().by_pk('04fcc1da3dc60d7e4e4c987022c9f08f20b2e9b16df6cd6bcb9b1251021b018260d603df7809991b9e21ee0263f92dad29fd2f1de56851ab62b2ecb410db0389a0').by_src_pk(-1).by_func_name(-1).by_timestamp(-1).sort(1).get_result(-1)[1]
 print(filter)
