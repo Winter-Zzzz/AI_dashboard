@@ -2,14 +2,36 @@
 
 ### A dashboard for Matter Tunnel that can be queried via natural language
 
-## Our Team
+## 👥 Team Members
 
-- Dongwook Kim: Dept.of Information Systems dongwook1214@gmail.com
-- Giram Park: Dept.of Information Systems kirammida@hanyang.ac.kr
-- Seoyoon Jung: Dept.of Information Systems yoooonnn@hanyang.ac.kr
-- Jisu Shin (SE only): Dept.of Information Systems sjsz0811@hanyang.ac.kr
+<table border="1" cellpadding="10" cellspacing="0" style="border-collapse: collapse;">
+  <tr>
+    <td align="center" width="300">
+      <b>👨‍💻 Dongwook Kim</b><br>
+      <samp>Information Systems</samp><br>
+      <code>dongwook1214@gmail.com</code>
+    </td>
+    <td align="center" width="300">
+      <b>👩‍💻 Giram Park</b><br>
+      <samp>Information Systems</samp><br>
+      <code>kirammida@hanyang.ac.kr</code>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="300">
+      <b>👩‍💻 Seoyoon Jung</b><br>
+      <samp>Information Systems</samp><br>
+      <code>yoooonnn@hanyang.ac.kr</code>
+    </td>
+    <td align="center" width="300">
+      <b>👩‍💻 Jisu Shin (SE only)</b><br>
+      <samp>Information Systems</samp><br>
+      <code>sjsz0811@hanyang.ac.kr</code><br>
+    </td>
+  </tr>
+</table>
 
-## Proposal
+## 📝 Proposal
 
 Our team introduces "AI_dashboard," which revolutionizes how organizations interact with and derive insights from blockchain data. This solution combines the power of artificial intelligence with blockchain technology to facilitate data access and analysis while maintaining high levels of data integrity.
 
@@ -21,7 +43,25 @@ This document will detail the AI model development process for AI_dashboard. We 
 
 Our solution eliminates intermediary-related data corruption risks, improves accessibility for non-technical users, maintains data integrity through blockchain immutability, provides real-time data analysis capabilities, and ensures secure local processing of sensitive information.
 
-## Datasets
+## 🚀 Quick Start
+
+Follow these steps to set up and run the project:
+
+1. Download Required Model File: [model_checkpoint.pt](https://drive.google.com/file/d/1nOoDVvYlb8ZzcUZbZO14z0UE2z38AF9t/view?usp=drive_link)
+
+2. Place it in the following directory: `ai/models/best_models`
+
+3. Grant execution permissions to the setup script
+    ```bash
+    chmod +x setup.sh
+    ```
+
+4. Run the setup script
+    ```bash
+    ./setup.sh
+    ```
+
+## 📊 Datasets
 
 ### 1. `core_dataset.json`
 
@@ -97,7 +137,7 @@ Key characteristics:
 - Maintains consistent output code for semantically equivalent queries
 
 
-## Methodology
+## 🔍 Methodology
 
 ### Dataset Generation
 
@@ -622,24 +662,6 @@ def plot_progress(self):
     plt.grid(True)
 ```
 
-### Installation and Setup
-
-Follow these steps to set up and run the project:
-
-1. Download Required Model File: [model_checkpoint.pt](https://drive.google.com/file/d/1nOoDVvYlb8ZzcUZbZO14z0UE2z38AF9t/view?usp=drive_link)
-
-2. Place it in the following directory: `ai/models/best_models`
-
-3. Grant execution permissions to the setup script
-    ```bash
-    chmod +x setup.sh
-    ```
-
-4. Run the setup script
-    ```bash
-    ./setup.sh
-    ```
-
 ### API Server Implementation
 
 #### FastAPI Server Configuration
@@ -665,7 +687,7 @@ Response Format:
 }
 ```
 
-## Evaluation
+## 📈 Evaluation
 ### Initial Training Results
 - Training Loss: 0.0099
 - Validation Loss: 0.0070
@@ -731,7 +753,7 @@ Output: "txn.by_pk('8f25b3a...').by_src_pk(-1).by_func_name(-1).by_order(1).get_
 - Correct function name recognition
 - Proper parameter ordering
 
-## Conclusion
+## 🎯 Conclusion
 
 This paper presented AI_dashboard, an innovative solution that bridges the gap between natural language interaction and blockchain data analysis. Our implementation successfully demonstrates several key achievements while identifying areas for future enhancement.
 

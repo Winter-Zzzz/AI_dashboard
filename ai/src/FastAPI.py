@@ -85,13 +85,13 @@ async def query_transactions(query_text: str, dataset: str):
         model, tokenizer = model_manager.get_model_and_tokenizer()
         
         if not all([model, tokenizer]):
-            raise HTTPException(status_code=500, detail="모델 초기화에 실패했습니다.")
+            raise HTTPException(status_code=100, detail="모델 초기화에 실패했습니다.")
         
         if not query_text:
-            raise HTTPException(status_code=400, detail="쿼리 텍스트가 필요합니다.")
+            raise HTTPException(status_code=200, detail="쿼리 텍스트가 필요합니다.")
             
         if not dataset:
-            raise HTTPException(status_code=400, detail="데이터셋이 필요합니다.")
+            raise HTTPException(status_code=300, detail="데이터셋이 필요합니다.")
         
         try:
             decoded_dataset = unquote(dataset)
@@ -106,7 +106,7 @@ async def query_transactions(query_text: str, dataset: str):
         result = execute_code(transformed, dataset_json)
         
         if result is None:
-            raise HTTPException(status_code=400, detail="쿼리 처리에 실패했습니다.")
+            raise HTTPException(status_code=500, detail="쿼리 처리에 실패했습니다.")
         return {
             "status": "success",
             "data": {
@@ -117,7 +117,7 @@ async def query_transactions(query_text: str, dataset: str):
         }   
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=600, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
