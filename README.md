@@ -626,7 +626,7 @@ def plot_progress(self):
 
 Follow these steps to set up and run the project:
 
-1. Download Required Model File: [models.safetensors](https://drive.google.com/file/d/1JC8L-BEQPzxPByrW-_M_1jrwgUfg-a-y/view?usp=drive_link)
+1. Download Required Model File: [model_checkpoint.pt](https://drive.google.com/file/d/1nOoDVvYlb8ZzcUZbZO14z0UE2z38AF9t/view?usp=drive_link)
 
 2. Place it in the following directory: `ai/models/best_models`
 
@@ -676,6 +676,8 @@ Response Format:
 ### Training Progress
 The model showed consistent improvement throughout the training process:
 
+![Training Progress]('https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true')
+
 - Training loss decreased significantly from 2.4846 to 0.0099
 - Validation loss reduced from 0.9378 to 0.0070
 - Achieved 19 performance improvements over 20 epochs
@@ -697,6 +699,8 @@ After attempting model fine-tuning, we observed that the fine-tuned version did 
    - Format inconsistencies in outputs
 
 Based on these results, we decided to proceed with the original pre-trained model, which demonstrated better stability and accuracy in query translation.
+
+![Fine-tuned Training Progress]('https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress_fine-tuned.png?raw=true')
 
 ### Performance Analysis of Original Model
 
