@@ -11,10 +11,10 @@ class ModelConfig:
     
     # 학습 하이퍼파라미터
     BATCH_SIZE: int = 8           # 배치 크기
-    LEARNING_RATE: float = 1e-5   # 학습률
+    LEARNING_RATE: float = 5e-4   # 학습률
     WEIGHT_DECAY: float = 0.01    # 가중치 감쇠 (L2 정규화)
     NUM_EPOCHS: int = 10           # 에폭 수
-    PATIENCE: int = 3             # Early Stopping을 위한 patience
+    PATIENCE: int = 7        # Early Stopping을 위한 patience
     
     # 생성 파라미터
     NUM_BEAMS: int = 5            # 빔 탐색 시 빔의 개수

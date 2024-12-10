@@ -7,7 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_linear_schedule_with_warmup
 import matplotlib.pyplot as plt
 from datetime import datetime
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 import json
 import sys
 
@@ -150,7 +150,9 @@ class TrainingTracker:
         # 에포크 번호를 파일명에 추가하여 훈련 상태 저장
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
         epoch_status_file = os.path.join(self.log_dir, f'training_status_epoch_{epoch}_{current_time}.json')
-        os.makedirs(os.path.join(project_root, 'logs', os.path.dirname(epoch_status_file), exist_ok=True))
+        status_dir = os.path.dirname(epoch_status_file)
+        if status_dir:  # Only create directory if path contains a directory
+            os.makedirs(status_dir, exist_ok=True)
 
         with open(epoch_status_file, 'w') as f:
             json.dump(status, f, indent=4)
@@ -180,21 +182,13 @@ def fine_tune_model():
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     tokenizer = T5Tokenizer.from_pretrained(model_dir)
     print(f"Loaded tokenizer from {model_dir}")
-    
-    # 체크포인트 로드
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    model = T5ForConditionalGeneration.from_pretrained(config.MODEL_NAME)
     model.resize_token_embeddings(len(tokenizer))
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
         
     print(f"학습된 모델 로딩 완료! (Device: {device})")
-
-    # 토크나이저 테스트
-    test_text ="Load 7 oldest transactions to dbd57ab0e947b8a96f0c84b48dead3a0c31ef822b8d442ea95ff53fc1a820dfed4d0caff5ef730b4ba38ef1074d15a966ef1a8aa02e089472838e5e898403c3161",
-    encoded = tokenizer.encode(test_text, return_tensors='pt')
-    decoded = tokenizer.decode(encoded[0])
-    print(f"Tokenizer test - Original: {test_text}")
-    print(f"Tokenizer test - Decoded: {decoded}")
 
     # 데이터셋 로드
     data_file = os.path.join(project_root, 'data', 'augmented_dataset.json')
@@ -256,7 +250,7 @@ def fine_tune_model():
         optimizer.zero_grad()
 
         for i, batch in enumerate(progress_bar):
-            with autocast():
+            with autocast(device_type='cuda'):
                 output = model(
                     input_ids=batch['input_ids'].to(device),
                     attention_mask=batch['attention_mask'].to(device), 
@@ -289,6 +283,33 @@ def fine_tune_model():
 
         print(f"\nEpoch {epoch+1}")
         print(f"Average Training Loss: {avg_train_loss:.4f}")
+
+        print("\n=== Test Generation ===")
+        model.eval()
+        test_texts = [
+            "Load second recent txn",
+            "Get second recent transaction",
+            "Show second recent result"
+        ]
+
+        for test_text in test_texts:
+            inputs = tokenizer(test_text, return_tensors="pt", padding=True, truncation=True).to(device)
+            
+            with torch.no_grad():
+                outputs = model.generate(
+                    input_ids=inputs.input_ids,
+                    attention_mask=inputs.attention_mask,
+                    max_length=100,
+                    num_beams=10,  # 증가
+                    length_penalty=0.6,  # 추가
+                    no_repeat_ngram_size=2,
+                    early_stopping=True,
+                    bad_words_ids=[[tokenizer.encode(word, add_special_tokens=False)[0]] for word in ['-src', 'pital']]  # 잘못된 토큰 방지
+                )
+            
+            predicted_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            print(f"Input: {test_text}")
+            print(f"Output: {predicted_text}\n")
 
         # 트래커에 저장
         improved = tracker.update(epoch + 1, avg_train_loss)
