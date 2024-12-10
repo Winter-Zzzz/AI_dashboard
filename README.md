@@ -23,11 +23,11 @@ Our solution eliminates intermediary-related data corruption risks, improves acc
 
 ## Datasets
 
-### 1. `simplified_generated_dataset.json`
+### 1. `core_dataset.json`
 
-A synthetic query-code parallel dataset containing 5000 pairs of natural language transaction queries and their corresponding Python filter code. Each entry consists of:
+A synthetic query-code parallel dataset containing 10,000 pairs of natural language transaction queries and their corresponding Python filter code. Each entry consists of:
 
-- Query: Natural langauge query for filtering transactions
+- Query: Natural language query for filtering transactions
 - Code: Corresponding Python code using `TransactionFilter` class
 
 Sample format:
@@ -35,36 +35,67 @@ Sample format:
 {
     "dataset": [
         {
-            "input": "Pull transaction from {src_pk}",
-            "output": "txn.by_pk(-1).by_src_pk('{src_pk}').by_func_name(-1).by_order(0).get_result(-1)"
+            "input": "Get three transactions from [pk] after [timestamp]",
+            "output": "txn.by_pk(-1).by_src_pk('[pk]').by_func_name(-1).after('[timestamp]').by_order(0).get_result(3)"
         },
         {
-            "input": "Load all recent from {src_pk} between {timestamp_1} and {timestamp_2}",
-            "output": "txn.by_pk(-1).by_src_pk('{src_pk}').by_func_name(-1).between('{timestamp_1}', '{timestamp_2}').by_order(1).get_result(-1)"
+            "input": "Get most recent transaction by [pk]",
+            "output": "txn.by_pk(-1).by_src_pk('[pk]').by_func_name(-1).by_order(1).get_result(1)[0]"
         }
     ]
 }
 ```
 
-### 2. `simplified_augmented_dataset.json`
+### 2. `augmentation_template_dataset.json`
 
-An augmented version of the query-code dataset using Natural Language Processing (NLP) techniques to increase lingustic diversity while preserving the semantic structure. The augmentation process maintains the original code outputs while varying the natural language queries.
+An augmentation dataset of 1500 additional pairs designed to enhance the model's handling of recent order variations:
+- 600 standard query-code pairs
+- 900 pairs (225 each) specifically for `most recent`, `first recent`, `second recent`, and `third recent` variations
 
-Sample augmented format: 
+Sample format:
 ```json
 {
     "dataset": [
         {
-            "input": "Load most recent txns to {pk} from {src_Pk}",
-            "output": "txn.by_pk('{pk}').by_src_pk('{src_Pk}').by_func_name(-1).by_order(1).get_result(1)"
+            "input": "Get most recent transaction to [pk]",
+            "output": "txn.by_pk('[pk]').by_src_pk(-1).by_func_name(-1).by_order(1).get_result(1)[0]"
         },
         {
-            "input": "4 fetch transactions to {pk} between by {src_Pk} and {timestamp_1} {timestamp_2}",
-            "output": "txn.by_pk('{pk}').by_src_pk('{src_Pk}').by_func_name(-1).between('{timestamp_1}', '{timestamp_2}').by_order(0).get_result(4)"
-        },
+            "input": "Show second recent transaction by [pk]",
+            "output": "txn.by_pk(-1).by_src_pk('[pk]').by_func_name(-1).by_order(1).get_result(1)[1]"
+        }
     ]
 }
 ```
+
+### 3. `augmented_dataset.json`
+
+An expanded dataset created by applying augmentation techniques to the core and template datasets, growing from 1,500 base examples to 3,094 augmented examples. Generated through BERT-based contextual substitution and random word swapping while preserving critical patterns like public keys, timestamps, and function names.
+
+Sample format:
+```json
+{
+    "dataset": [
+        {
+            "input": "All get latest function getCoordinate",
+            "output": "txn.by_pk(-1).by_src_pk(-1).by_func_name('getCoordinate').by_order(1).get_result(-1)"
+        },
+        {
+            "input": "Load ten oldest feedback function",
+            "output": "txn.by_pk(-1).by_src_pk(-1).by_func_name('feedback').by_order(0).get_result(10)"
+        }
+    ]
+}
+```
+
+Key characteristics:
+- Maintains semantic equivalence with original queries
+- Preserves critical components (public keys, timestamps, function names)
+- Generated through BERT contextual substitution (30% probability)
+- Includes word swap variations (30% probability)
+- Filtered to remove any entries containing UNK tokens
+- Maintains consistent output code for semantically equivalent queries
+
 
 ## Methodology
 
@@ -75,36 +106,219 @@ The synthetic query-code dataset is generated using `TransactionFilterDatasetGen
 #### 1. Query Generation Components:
 
 - Commands: `Fetch`, `Get`, `Query`, `Load`, `Read`, `Pull`, `Show`, `List`
-- Sort orders: `recent`, `earliest`, `latest`, `oldest`, `most recent`
-- Random function name: `setAnimal`, `changeColor`, `getCoordinate`, ...
-- Random count: number of transactions (ex. 1, 'one', 2, 'two', ...)
-- Random public key: 130-character hexadecimal strings
-- Random Timestamps: Unix timestamps between 1730780906 and 1800000000
+- Sort Orders: `latest`, `oldest`, `recent`, `earliest`, `most recent`, `last`
+- Transaction Count: Numbers 1-10 (expressed as digits or words) or 'all'
+- Recent Order Variations:
+    - `most recent` / `first recent`: Returns the latest transaction (equivalent to [0] index)
+    - `second recent`: Returns the second latest transaction (equivalent to [1] index)
+    - `third recent`: Returns the third latest transaction (equivalent to [2] index)
+- Filter Conditions:
+    - Destination public key (to [public_key])
+    - Source public key (from/by [public_key])
+    - Function names (e.g., `setAnimal`, `getCoordinate`, `getTemperature`)
+    - Timestamp filters (before/after/between [timestamp])
 
 #### 2. Input Query Generation Rules:
 
 - Each query randomly includes combinations of:
-    - Target public key (to [pk])
-    - Source public key (from, by [src_pk])
-    - Random function name 
-    - Timestamp filter (before/after [timestamp])
-    - Count (1-10)
-    - Sort order
-- At least one filter condition is guranteed for each query
+    - Command word (Required)
+    - Transaction count (optional)
+    - Sort order (optional)
+    - Filter conditions (at least one required)
+        - Public key filters (to/from/by)
+        - Function name
+        - Timestamp constraints
 
-#### 3. Code Generation Logic
+#### 3. Code Generation Rules
 
-- Translates natural language queries into `TransactionFilter` method chains
-- Applies filters in the following order:
-    - `.by_pk()` for target public key
-    - `.by_src_pk()` for source public key
-    - `.by_func_name()` for function type
-    - `.after()` for transactions after timestamp 
-    - `.before()` for transactions before timestamp
-    - `.by_order()` for ordering
-    - `.get_result()` for transaction count
+The generator translates natural language queries into method chains following this pattern:
+```python
+txn.by_pk(target_pk)
+   .by_src_pk(source_pk)
+   .by_func_name(function_name)
+   .after(timestamp)
+   .before(timestamp)
+   .by_order(order)
+   .get_result(count)
+```
 
-The dataset generation ensures diverse combination of filtering conditions while maintaining consistent translation patterns between natural language queries and their corresponding Python filter code.
+Special cases:
+- Missing filters are set to `-1`
+- `count` is set to `-1` for `all` or plural queries without specific count
+- Order is set to `1` for latest/recent and `0` for oldest/earliest
+- Recent variations append specific index:
+```python
+# Most recent / First recent
+.get_result(1)[0]
+# Second recent
+.get_result(1)[1]
+# Third recent
+.get_result(1)[2]
+```
+#### 4. Usage
+```python
+generator = TransactionFilterDatasetGenerator()
+
+# Generate base training dataset (10,000 pairs)
+generator.generate_dataset(10000)  # Generates standard query-code pairs for training
+
+# Generate augmentation template dataset (500 pairs)
+# - 400 standard query-code pairs
+# - 100 pairs for recent order variations (25 each case)
+generator.generate_dataset(400)     
+generator.generate_most_recent_dataset(25)  # Generates most/first/second/third recent cases
+
+# Save dataset
+with open('path/to/dataset.json', 'w') as json_file:
+    json.dump(generator.dataset, json_file, indent=4)
+```
+Core dataset (10,000 pairs):
+- The dataset ensures comprehensive coverage of query patterns and filtering combinations while maintaining consistent translation between natural language and code.
+Augmentation template dataset (500 pairs):
+- This template dataset focuses on specific recent-order variations and complex query patterns, designed to serve as a foundation for data augmentation techniques and fine-tuning
+
+### Model Training 
+
+#### 1. Model Architecture & Configuration
+- Base Model: T5-small with custom configuration
+- Device: CUDA GPU with CPU fallback support
+- Implemented automatic device detection and memory management
+    ```python
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available():
+        print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+        print(f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.0f}MB")
+    ```
+
+#### 2. Training Infrastructure
+**Dataset Management**
+The `QueryDataset` class has been enhanced with:
+- Text normalization methods
+- Special token handling
+- Efficient padding and truncation strategies
+```python
+class QueryDataset(Dataset):
+    def __getitem__(self, idx):
+        input_encoding = self.tokenizer(
+            input_text,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors="pt"
+        )
+```
+
+**Training Tracker Implementation**
+`TrainingTracker` class for monitoring training progress:
+- Loss history tracking
+- Progresss visualization
+- Training status persistence
+- Automated checkpoint management
+```python
+class TrainingTracker:
+    def update(self, epoch, train_loss):
+        improved = train_loss < self.best_loss
+        self.training_history['improvement'].append(improved)
+        if improved:
+            self.best_loss = train_loss
+        self.plot_progress()
+        self.save_status()
+        return improved
+```
+
+#### 3. Training Process Optimizations
+**Memory Management**
+- Implemented automatic CUDA cache clearing
+- Optimized batch processing with gradient accumulation
+- Added mixed precision training
+```python
+with autocast(device_type='cuda'):
+    output = model(
+        input_ids=batch['input_ids'].to(device),
+        attention_mask=batch['attention_mask'].to(device), 
+        labels=batch['labels'].to(device)
+    )
+    loss = output.loss / config.ACCUMULATION_STEPS
+```
+
+**Gradient Handling**
+- Implemented gradient accumulation steps
+- Added gradient clipping
+- Optimized scheduler updates
+```python
+if (i + 1) % config.ACCUMULATION_STEPS == 0:
+    scaler.unscale_(optimizer)
+    torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
+    scaler.step(optimizer)
+    scaler.update()
+    scheduler.step()
+    optimizer.zero_grad()
+```
+
+#### 4. Model Checkpointing
+Enhanced checkpoint saving with comprehensive state preservationa;
+```python
+checkpoint = {
+    'model_state_dict': model.state_dict(),
+    'tokenizer_vocab': tokenizer.get_vocab(),
+    'tokenizer_special_tokens_map': tokenizer.special_tokens_map,
+    'optimizer_state_dict': optimizer.state_dict(),
+    'scheduler_state_dict': scheduler.state_dict(),
+    'scaler_state_dict': scaler.state_dict(),
+    'epoch': epoch,
+    'loss': avg_val_loss,
+}
+```
+
+#### 5. Validation Process
+Improved validation with example generation:
+```python
+generated = model.generate(
+    input_ids=batch['input_ids'][0:1].to(device),
+    attention_mask=batch['attention_mask'][0:1].to(device),
+    max_length=config.MAX_GEN_LENGTH,
+    num_beams=config.NUM_BEAMS,
+    length_penalty=config.LENGTH_PENALTY,
+    no_repeat_ngram_size=config.NO_REPEAT_NGRAM_SIZE,
+    early_stopping=config.EARLY_STOPPING
+)
+```
+
+#### 6. Training Configuration
+Key hyperparameters and settings:
+```
+# Model Configuration
+MAX_LENGTH = 256
+MAX_GEN_LENGTH = 256
+BATCH_SIZE = 8
+LEARNING_RATE = 5e-5
+WEIGHT_DECAY = 0.01
+NUM_EPOCHS = 20
+PATIENCE = 7
+GRADIENT_CLIP = 1.0
+ACCUMULATION_STEPS = 4
+```
+
+#### 7. Implementation Notes
+1. **Directory Structure**
+- Automated creation of necessary directories
+- Organized file structure for `logs`, `models`, and `data`
+- Consistent path handling across different environments
+
+2. **Error Handling**
+- Added validation for data loading
+- Implemented graceful failure handling
+- Enganced error reporting and logging
+
+3. **Performance Optimization**
+- Implemented parallel data loading
+- Added model optimization techniques
+- Included progress tracking and visualization
+
+4. **Code Organization**
+- Modular class structure
+- Clear seperation of concerns
+- Improved maintability and readability
 
 ### Data Augmentation
 
@@ -116,47 +330,35 @@ The system initializes with several crucial setup steps:
 
 - Downloads required NLTK packages:
     - wordnet
-    - averaged_perceptron_tagger
     - averaged_perceptron_tagger_eng
-    - punkt
 - Initializes regex patterns for identifying:
     - 130-character hexadecimal values
-    - Unix timestamps (10-digit numbers)
-    - Function calls (e.g., "setup function")
-    - Special phrases (e.g., "most recent")
-    - Number variations and their text representation
-- Sets up preserved keywords including:
-    - Directional terms (`to`, `from`, `by`)
-    - Quantifiers (`all`, `transactions`, `txns`)
-    - Temporal indicators (`latest`, `oldest`, `earliest`, `recent`, `most recent`)
-    - Time relations (`after`, `before`, `between`)
-    - Transaction-related terms (`transaction`, `transactions`, `txns`, `txn`)
-    - Function-related terms (`function`, `functions`)
+    - Unix timestamps (10-digit numbers) 
+    - Function patterns (e.g., "getCoordinate function") 
+    - Directional patterns (e.g., "to/from/by [hex]")
+    - Temporal patterns (e.g., "after/before [timestamp]")
 
 #### 2. Preservation Rules:
 The system maintains critical components through careful preservation rules:
-
-- All preserved keywords are automatically added to the stopwords list
-- Special preprocessing for:
-    - "most recent" phrases
-    - Function call patterns (e.g., "setup function")
-- Preservation of technical identifiers:
-    - Hexadecimal values
+- Special patterns are automatically added to stopwords:
+    - Hexadecimal public key
     - Timestamps
-    - Function types
-    - Direction indicators
+    - Function patterns
+    - Directional indicators for public keys (e.g., "to [hex]")
+    - Temporal indicators with timestamps (e.g., "after [timestamp])
 
 #### 3. Augmentation Techniques:
 
-This system employs three distinct augmentation methods:
+This system employs two distinct augmentation methods:
 
-##### WordNet Synonym Substitution
+##### BERT Contextual Word Substitution
 
 ```python
-naw.SynonymAug(
-    aug_src='wordnet',
-    aug_p=0.1,
-    aug_min=1,
+naw.ContextualWordEmbsAug(
+    model_path='bert-base-uncased',
+    device=self.device,
+    action="substitute",
+    aug_p=0.3,
     stopwords=stopwords
 )
 ```
@@ -181,26 +383,25 @@ naw.ContextualWordEmbsAug(
 )
 ```
 - Uses BERT model for context-aware replacements
-- 10% substitution probability
-- Runs on CUDA for improved performance
-- Maintains contextual relevance
+- 30% substitution probability
+- Maintains contextual relevance while preserving critical patterns
 - Examples:
     - Original: "Get transactions to {hex} setup function"
     - Augmented: "Fetch records to {hex} setup function"
+- Note: `WordNet-based synonym substitution` was considered but not implemented as it provides similar but less sophisticated replacements compared to BERT.
 
 ##### Random Word Swap
 
 ```python
 naw.RandomWordAug(
     action="swap",
-    aug_p=0.1,
-    aug_min=1,
-    stopwords=stopwords
+    aug_p=0.3,
+    stopwords=additional_stopwords
 )
 ```
 - Creates syntactic variations through controlled word swapping
-- 10% swap probability
-- Preserves critical structure and stopwords
+- 30% swap probability
+- Uses additional stopwords to preserve extended patterns
 - Examples:
     - Original: "Query recent transactions from {hex}"
     - Augmented: "Recent transactions query from {hex}"
@@ -213,224 +414,213 @@ The augmentation process follows a structured pipeline:
 
 ##### Pre-processing
 
-- Special token handling:
-    - Converts function patterns to special tokens (e.g., "FUNC_{hash}_TOKEN")
-    - Transforms "most recent" to "MOST_RECENT_TOKEN"
-- Applies preservation rules
+- Pattern identification and preservation
+- Stopwords initialization for each augmentation method
+- Device setup (CUDA if available, CPU otherwise)
 
-##### Batch Processing
+##### Augmentation Process
 
-- Processes data in batches (default: 32 entries)
-- Applies all three augmentation techniques sequentially
-- Maintains progress tracking with tqdm
-- Generates specified number of variations per input (default: 2)
+- Maintains original input-output pairs
+- Applies each augmentation method sequentially
+- Generates on variation per method for each input
+- Filters out augmentations containing `UNK` tokens
+- Progress tracking with tqdm
 
-##### Post-processing
+#### Data Managment
 
-- Restores special tokens to original form:
-    - Function patterns
-    - "most recent" phrases
-- Performs text cleaning:
-    - Removes excess whitespace
-    - Standardizes punctuation spacing
-    - Normalizes method chains
-
-##### Quality Control 
-
-- Filters out augmentations containing 'UNK' tokens
-- Removes duplicate input-output pairs
+- Saves results to JSON format maintaining input-output pair structure
 - Includes comprehensive error handling and logging
-- Validates input and output data types 
-
-#### 5. Data Management
-
-The augmented data is managed through structured file operations:
-- Saves results to JSON format with detailed structure
-- Maintains original-augmented pairs relationship
-- Generates augmentation statistics
 - Provides absolute path references for data files
 
-The system ensures high-quality augmentation while maintaining data integrity meaning through the process.
+The augmentation system leverages BERT-based contextual substitution and controlled word swapping while preserving critical patterns to generate linguistically diverse but semantically consistent variations of the original queries.
 
+### Fine Tuning
+#### 1. Core Configuration
+##### Model Settings
+```python
+@dataclass
+class ModelConfig:
+    MODEL_NAME: str = 't5-small'
+    MAX_LENGTH: int = 256
+    MAX_GEN_LENGTH: int = 256
+    VOCAB_SIZE: int = 32100
+    
+    # Training Parameters
+    BATCH_SIZE: int = 8
+    LEARNING_RATE: float = 5e-4
+    WEIGHT_DECAY: float = 0.01
+    NUM_EPOCHS: int = 5
+    PATIENCE: int = 3
+```
 
-### Model Training and Fine-tuning
+##### Directory Management
+```python
+def __post_init__(self):
+    self.PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    self.MODEL_DIR = os.path.join(self.PROJECT_ROOT, 'models')
+    self.BEST_MODEL_DIR = os.path.join(self.MODEL_DIR, 'best_model')
+    self.FINETUNED_MODEL_DIR = os.path.join(self.MODEL_DIR, 'fine_tuned_model')
+```
+#### 2. Implementation Components
+##### Model Initialization
 
-Our model training implementation utilizes the Text-to-Text Transfer Transfomrer(T5) architecture, speicifically configured for translating natural language queries into transaction filtering code. Here's a detailed breakdown of our training process:
+```python
+model_dir = os.path.join(project_root, 'models', 'best_model')
+checkpoint_path = os.path.join(model_dir, "model_checkpoint.pt")
 
-#### 1. Model Architecture & Configuration
+tokenizer = T5Tokenizer.from_pretrained(model_dir)
+checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)  # Added weights_only parameter
+model = T5ForConditionalGeneration(t5_config)
+model.resize_token_embeddings(len(tokenizer))  # Added token embedding resize
+model.load_state_dict(checkpoint['model_state_dict'])
+```
 
-- Base Model: T5-small
-- Device: CUDA GPU (with CPU fallback)
-- Model Configuration(`model_config.py`)
+#### 2. Training Infrastructure
+##### Data Management
+```python
+train_dataset = QueryDataset(input_texts, output_texts, tokenizer, config.MAX_LENGTH)
+train_dataloader = DataLoader(
+    train_dataset, 
+    batch_size=config.BATCH_SIZE, 
+    shuffle=True, 
+    num_workers=2, 
+    pin_memory=True if torch.cuda.is_available() else False  # Updated conditional pin_memory
+)
+```
+##### Training Setup
+```python
+optimizer = AdamW(
+    model.parameters(), 
+    lr=config.LEARNING_RATE,
+    weight_decay=config.WEIGHT_DECAY, 
+    eps=1e-8
+)
 
-    ```python
-    # Model selection
-    MODEL_NAME = 't5-small'
+scheduler = get_linear_schedule_with_warmup(
+    optimizer,
+    num_warmup_steps=int(total_steps * 0.1),  # Updated warmup steps calculation
+    num_training_steps=total_steps
+)
 
-    # Sequence lengths
-    MAX_LENGTH = 256          # Maximum input sequence length
-    MAX_GEN_LENGTH = 256     # Maximum generation length
+scaler = GradScaler()  # Added GradScaler initialization
+```
 
-    # Training hyperparameters
-    BATCH_SIZE = 8
-    LEARNING_RATE = 5e-5
-    WEIGHT_DECAY = 0.01
-    NUM_EPOCHS = 20
-    PATIENCE = 7             # Early stopping patience
-
-    # Generation parameters
-    NUM_BEAMS = 5
-    LENGTH_PENALTY = 1.0
-    NO_REPEAT_NGRAM_SIZE = 0
-
-    # Optimization parameters
-    GRADIENT_CLIP = 1.0
-    ACCUMULATION_STEPS = 4
-    EARLY_STOPPING = True
-    ```
-- Tokenizer Configuration
-    - Maximum sequence length: 256 tokens
-    - Padding side: Right
-    - Truncation side: Right
-    - Speical tokens added
-        - Directional indicators: `to`, `from`, `by`
-        - Temporal indicators: `latest`, `oldest`, `earliest`, etc.
-        - Relational terms: `after`, `before`, `between`
-        - XML-style tags: `<hex>`, `<time>`, `<func>`
-
-#### 2. Dataset Management
-
-- Data Split: 90% training, 10% validation
-- Dataset Class Implementation: `QueryDataset`
-    - Handles text preprocessing
-    - Manages speical token patterns (hex values, timestamps, function names)
-    - Implements length truncation and padding
-- DataLoader Configuration:
-    - Batch size: 8
-    - Training data: shuffled
-    - Validation data: Sequential
-    - Workers: 2 per loader
-    - Pin memory: Enabled for CUDA devices
-
-#### 3. Training Configuration
-
-##### Optimizer
-
-- AdamW
-- Learning rate: 5e-5
-- Weight decay: 0.01
-- Epsilon: 1e-8
-
-##### Scheduler
-
-- Linear schedule with warmup
-- Warmup steps: 10% of total steps
-- Total_steps = num_batches * num_epochs
-
-##### Training Parameters
-
-- Number of epochs: 20
-- Gradient accumulation steps: 4
-- Gradient clipping: 1.0
-- Mixed precision training with GradScaler
-- Early stopping patience: 7 epochs
-
-#### 4. Generation Settings
-
-##### Beam Search Configuration
-
-- Number of beams: 5
-- Length penalty: 1.0
-- No repeat n-gram size: 0
-- Early stopping: Enabled
-
-#### 5. Training Process
-
-The training loop includes several key components:
-
-1. Memory Mangagement
-
-    Clear GPU memory before training
-    ```python
-    torch.cuda.empty_cache()
-    ```
-
-2. Progress Tracking
-
-    ```python
+##### Training Loop
+```python
+for epoch in range(start_epoch, start_epoch + config.NUM_EPOCHS):
+    model.train()
+    total_train_loss = 0
+    train_steps = 0  # Added step counter
+    
     progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}")
-    progress_bar.set_postfix({
-        'loss': f'{loss.item() * config.ACCUMULATION_STEPS:.4f}',
-        'lr': f'{scheduler.get_last_lr()[0]:.2e}'
-    })
-    ```
+    optimizer.zero_grad()
 
-3. Loss Calculation and Optimization
+    for i, batch in enumerate(progress_bar):
+        with autocast(device_type='cuda'):
+            output = model(
+                input_ids=batch['input_ids'].to(device),
+                attention_mask=batch['attention_mask'].to(device), 
+                labels=batch['labels'].to(device)
+            )
+            loss = output.loss / config.ACCUMULATION_STEPS
+        
+        scaler.scale(loss).backward()
 
-    ```python
-    with autocast(device_type='cuda'):
-    output = model(
-        input_ids=batch['input_ids'].to(device),
-        attention_mask=batch['attention_mask'].to(device), 
-        labels=batch['labels'].to(device)
-    )
-    loss = output.loss / config.ACCUMULATION_STEPS
-    ```
+        if (i + 1) % config.ACCUMULATION_STEPS == 0:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
+            scaler.step(optimizer)
+            scaler.update()
+            scheduler.step()
+            optimizer.zero_grad()
 
-4. Gradient Accumulation
+        total_train_loss += loss.item() * config.ACCUMULATION_STEPS
+        train_steps += 1
 
-    ```python
-    if (i + 1) % config.ACCUMULATION_STEPS == 0:
+        progress_bar.set_postfix({
+            'loss': f'{loss.item() * config.ACCUMULATION_STEPS:.4f}',
+            'lr': f'{scheduler.get_last_lr()[0]:.2e}'
+        })
+```
+
+#### 3. Key Optimizations
+##### Memory Management
+- Mixed precision training (FP16)
+- Gradient acculuation (4 steps)
+- Automatic GPU/CPU detection
+```python
+@property
+def device_settings(self):
+    return {
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
+        'n_gpu': torch.cuda.device_count(),
+        'fp16': self.FP16 and torch.cuda.is_available()
+    }
+```
+##### Training Stability
+- Gradient clipping (1.0)
+- Early stopping (patience: 3)
+- Learning rate warmup (10%)
+```python
+if (i + 1) % config.ACCUMULATION_STEPS == 0:
     scaler.unscale_(optimizer)
     torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
     scaler.step(optimizer)
-    scaler.update()
-    scheduler.step()
-    optimizer.zero_grad()
-    ```
-5. Validation Process
+```
 
-    - Runs validation after each epoch
-    - Generates sample outputs for quality assessment
-    - Tracks and saves validation examples
-    - Computes validation loss
+##### Progress Tracking
+```python
+def update(self, epoch, train_loss):
+    improved = train_loss < self.best_loss
+    self.training_history['improvement'].append(improved)
+    if improved:
+        self.best_loss = train_loss
+    self.plot_progress()
+    self.save_status(epoch)
+    return improved
+```
 
-6. Model Checkpointing
+#### 4. Results Handling
+##### Checkpointing
+```python
+checkpoint = {
+    'model_state_dict': model.state_dict(),
+    'tokenizer_vocab': tokenizer.get_vocab(),
+    'tokenizer_special_tokens_map': tokenizer.special_tokens_map,
+    'optimizer_state_dict': optimizer.state_dict(),
+    'scheduler_state_dict': scheduler.state_dict(),
+    'scaler_state_dict': scaler.state_dict(),
+    'epoch': epoch,
+    'loss': avg_train_loss,
+}
+```
 
-    - Saves best model based on validation loss
-    - Implements early stopping with patience (7 epochs)
-    - Maintains training progress visualization
-
-#### 6. Progress Tracking
-
-The `TrainingTracker` class manages:
-- Loss histroy tracking
-- Progress visualization
-- Training status persistence
-- Best model checkpointing
-
-#### 7. Output Example
-
-Validation outputs are generated and logged in the following format:
-
-![validation_example](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/validation_example.png?raw=true)
-
-The training implementation emphasizes:
-
-- Efficient resource utilization through gradient accumulation (4 steps)
-- Training stability with mixed precision and gradient clipping (1.0)
-- Comprehensive progress monitoring and visualization
-- Robust validation and early stopping mechanisms
-- Optimized beam search generation with configured parameters
-
-The combination of these components ensures effective model training while computational efficiency and output quality. All hyperparameters are centrallized through the ModelConfig class for easy modification and experimentation.
-
-#### 4. Generation Settings
-
-- Beam Search Size: 5
-- Length Penalty: 1.0
-- No Repeat N-gram Size: 0
-- Early Stopping: Enabled
+##### Progress Visualization
+```python
+def plot_progress(self):
+    plt.figure(figsize=(12, 6))
+    plt.plot(self.training_history['epochs'], 
+             self.training_history['train_loss'], 
+             label='Training Loss', 
+             marker='o')
+    
+    improved_epochs = [e for i, e in enumerate(self.training_history['epochs']) 
+                      if self.training_history['improvement'][i]]
+    improved_losses = [l for i, l in enumerate(self.training_history['train_loss']) 
+                      if self.training_history['improvement'][i]]
+    
+    if improved_epochs:
+        plt.scatter(improved_epochs, improved_losses, 
+                   color='green', s=100, 
+                   label='Improvement', 
+                   zorder=5)
+    
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Progress')
+    plt.legend()
+    plt.grid(True)
+```
 
 ### Installation and Setup
 
@@ -476,115 +666,120 @@ Response Format:
 ```
 
 ## Evaluation
+### Initial Training Results
+- Training Loss: 0.0099
+- Validation Loss: 0.0070
+- Best Loss: 0.00467
+- Total Improvements: 19
+- Final Epoch: 20
 
-After completing the training process over 20 epoches (as defined in ModelConfig), our model demonstrated robust performance and consistent learning characteristic comprehensive analysis of the results.
+### Training Progress
+The model showed consistent improvement throughout the training process:
 
-### 1. Training Performance Metrics
-#### Loss Metrics:
+- Training loss decreased significantly from 2.4846 to 0.0099
+- Validation loss reduced from 0.9378 to 0.0070
+- Achieved 19 performance improvements over 20 epochs
+- Best model checkpoint saved at /content/AI_dashboard/ai/models/best_model
 
-The system generates real-time training progress plots showing:
-- Epoch-wise training loss
-- Improvement points highlighted
-- Learning rate scheduling effects
-- Training Progress Plot:
-    - X-axis: Epochs
-    - Y-axis: Loss values
-    - Green dots: Points of improvement
-    - Continuous line: Training loss trend
+These results indicate that the model trained successfully with proper generalization without overfitting.
 
-The training progress plot demonstrates strong convergence characteristics:
-- Initial rapid learning phase with loss dropping from 1.2 to 0.4 in first 2 epochs
-- Steady improvement phase between epochs 2-10
-- Fine-tuning phase after epoch 10 with consistent minor improvements
-- No signs of overfitting (validation loss consistently below training loss)
-- Smooth convergence curve without significant fluctuations
-    
-![training_progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
+### Fine-tuning Analysis
+After attempting model fine-tuning, we observed that the fine-tuned version did not provide meaningful improvements over the original model:
 
-3. **Model Validation**
+1. **Performance Metrics**
+   - Inconsistent loss values during fine-tuning
+   - Early stopping triggered after 7 epochs without improvement
+   - Test generations showed degraded output quality
 
-    Each epoch includes sample validation outputs:
+2. **Output Quality Issues**
+   - Incorrect syntax in generated code
+   - Inconsistent query handling
+   - Format inconsistencies in outputs
 
-    ![Validation](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/validation_example.png?raw=true)
+Based on these results, we decided to proceed with the original pre-trained model, which demonstrated better stability and accuracy in query translation.
 
-    The model demonstrates:
-    - Correct preservation of query structure
-    - Accurate handling of special tokens and timestamps
-    - Proper translation of natural language to filter chain syntax
-    - Appropriate parameter formatting and method ordering
+### Performance Analysis of Original Model
 
-4. **Performance Summary**
-    The evaludation results indicate that
-    - The model successfully learned the natural language to code translation task
-    - Training was stable and efficient without triggering early stopping
-    - The low validation loss (0.0043) suggests good generalization capability
-    - The model maintains consistent performance across different query patterns and complexities
+#### 1. Query Processing Accuracy
+Strong performance across various query types:
 
-These results validate that our model is well-suited for the AI_dashboard system's requirements of translating natural language queries into blockchain transaction filter code.
+1. **Basic Queries**
+```
+Input: "Get all most recent setPowerState txn"
+Output: "txn.by_pk(-1).by_src_pk(-1).by_func_name('setPowerState').by_order(1).get_result(-1)"
+```
+
+2. **Complex Time-based Queries**
+```
+Input: "Appearance all before <time> 1794595202 </time>"
+Output: "txn.by_pk(-1).by_src_pk(-1).by_func_name(-1).before('1794595202').by_order(0).get_result(-1)"
+```
+
+3. **Hex Address Handling**
+```
+Input: "Show all most recent to <hex> 8f25b3a... </hex>"
+Output: "txn.by_pk('8f25b3a...').by_src_pk(-1).by_func_name(-1).by_order(1).get_result(-1)"
+```
+
+#### 2. Key Strengths
+- Perfect handling of hex addresses
+- Accurate time-based query processing
+- Correct function name recognition
+- Proper parameter ordering
 
 ## Conclusion
 
-This paper presented AI_dashboard, an innovative solution that bridges the gap between natural language interaction and blockchain data analysis. Our implementation successfully demonstrates several key technical achievements and system benefits while opening avenues for future development.
+This paper presented AI_dashboard, an innovative solution that bridges the gap between natural language interaction and blockchain data analysis. Our implementation successfully demonstrates several key achievements while identifying areas for future enhancement.
 
-### Technical Achievements
+### Key Achievements
 
-1. **Advanced Data Generation and Augmentation**
-   - Successfully generated a comprehensive synthetic dataset of 5000 query-code pairs
-   - Implemented sophisticated augmentation techniques using WordNet, BERT, and random word swap methods
-   - Achieved high-quality data preservation through multi-layered quality control processes
+1. **Natural Language Processing Integration**
+   - Successfully implemented natural language query processing for blockchain data
+   - Achieved high accuracy in query translation to executable code
+   - Developed robust pattern recognition for complex queries
 
-2. **Effective Model Architecture and Training**
-   - Successfully fine-tuned T5-small model for query-to-code translation
-   - Achieved impressive convergence with best loss of 0.00369
-   - Implemented efficient training optimizations including gradient accumulation and mixed precision training
-   - Demonstrated stable learning characteristics across 30 epochs without overfitting
+2. **Model Performance**
+   - Achieved optimal performance with initial training
+   - Successfully handled various query types including timestamps, function names, and hex addresses
+   - Demonstrated stable performance across different query patterns
 
-3. **Direct Blockchain Integration**
-   - Developed a scalable FastAPI server architecture with gRPC connection
-   - Implemented comprehensive error handling and validation
-   - Ensures data integrity through direct blockchain access without intermediaries
+3. **Technical Implementation**
+   - Built efficient data generation and augmentation pipeline
+   - Implemented robust training infrastructure with optimized memory management
+   - Developed comprehensive API server implementation
 
 ### System Benefits
 
-1. **Enhanced Accessibility**
-   - Democratized blockchain data access for non-technical users
-   - Eliminated the need for specialized query language knowledge
-   - Reduced the learning curve for new team members
+1. **Accessibility**
+   - Simplified blockchain data access for non-technical users
+   - Eliminated need for specialized query language knowledge
+   - Reduced learning curve for new team members
 
-2. **Guaranteed Data Integrity**
-   - Direct blockchain integration through gRPC ensures data authenticity
-   - No intermediary systems that could potentially compromise data
-   - Leverages blockchain's inherent immutability for reliable data access
+2. **Data Integrity**
+   - Maintained data authenticity through direct blockchain integration
+   - Eliminated intermediary systems that could compromise data
+   - Preserved blockchain's inherent immutability
 
-3. **Operational Efficiency**
-   - Real-time natural language query processing
-   - Direct blockchain data access for immediate insights
-   - Streamlined workflow for data analysis tasks
+3. **Performance**
+   - Achieved real-time query processing
+   - Implemented efficient memory management
+   - Demonstrated stable performance across various query types
 
-### Current Limitations and Future Work
+### Future Work
 
-1. **Computational Resources and Data Scale**
-   - Current implementation was constrained by Google Colab's GPU usage limits
-   - Training data size was optimized for available computational resources
-   - Access to more powerful GPU infrastructure would enable:
-     - Larger-scale data augmentation
-     - More extensive model training
-     - Experimentation with larger language models
-     - Potential for significantly improved performance metrics
+1. **Model Enhancement**
+   - Further expansion of the training dataset
+   - Integration of more complex query patterns
+   - Investigation of alternative fine-tuning approaches
 
-2. **Model Enhancement**
-   - Expand the training dataset with more complex query patterns
-   - Explore larger language models for improved accuracy
-   - Implement continuous learning capabilities with user feedback
+2. **Feature Development**
+   - Addition of visualization capabilities
+   - Implementation of batch processing
+   - Enhancement of query complexity handling
 
-3. **Feature Extensions**
-   - Develop support for more complex analytical queries
-   - Add visualization capabilities for query results
-   - Implement batch processing for large-scale analyses
+3. **System Optimization**
+   - Further performance optimization for large-scale deployments
+   - Enhancement of real-time processing capabilities
+   - Implementation of advanced caching mechanisms
 
-4. **Performance Optimization**
-   - Enhance query processing efficiency
-   - Optimize for large-scale deployments
-   - Expand blockchain integration capabilities
-
-This project successfully demonstrates the potential of combining AI with blockchain technology to create more accessible and efficient data analysis tools. While our current implementation was constrained by computational resources in the Google Colab environment, the achieved results show significant promise. With access to more powerful GPU infrastructure, the system could be further enhanced through larger-scale data augmentation and more extensive model training. The strong foundation established in this work, particularly the direct blockchain integration ensuring data integrity, provides an excellent starting point for both academic research and practical applications in the blockchain industry.
+The project successfully demonstrates the potential of combining AI with blockchain technology to create accessible and efficient data analysis tools. The implemented solution provides a solid foundation for both academic research and practical applications in the blockchain industry, while offering clear pathways for future enhancements and optimizations.

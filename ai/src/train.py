@@ -19,7 +19,7 @@ sys.path.append(project_root)
 
 os.makedirs(os.path.join(project_root, 'logs'), exist_ok=True)
 os.makedirs(os.path.join(project_root, 'models', 'best_model'), exist_ok=True)
-os.makedirs(os.path.join(project_root, 'data', 'raw'), exist_ok=True)
+os.makedirs(os.path.join(project_root, 'data'), exist_ok=True)
 
 from utils.data_loader import load_training_data
 from src.config.model_config import ModelConfig
@@ -164,7 +164,7 @@ def train_model():
     torch.cuda.empty_cache()
 
     tracker = TrainingTracker(os.path.join(project_root, 'logs'))
-    data_file = os.path.join(project_root, 'data', 'augmented', 'simplified_augmented_dataset.json')
+    data_file = os.path.join(project_root, 'data', 'augmented_dataset.json')
     input_texts, output_texts = load_training_data(data_file)
     
     if len(input_texts) == 0 or len(output_texts) == 0:

@@ -101,7 +101,7 @@ async def query_transactions(query_text: str, dataset: str):
         
         # inference.py의 함수들을 순차적으로 호출
         generated = generate_code(query_text, model, tokenizer)
-        transformed = transform_code(generated)
+        transformed = clean_generated_code(generated)
         transformed = transformed.replace(" ", "")
         result = execute_code(transformed, dataset_json)
         

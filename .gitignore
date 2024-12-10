@@ -23,3 +23,4 @@ ai/models/best_model/model.safetensors
 ai/models/fine_tuned_model/checkpoint-*/
 ai/models/fine_tuned_model/model.safetensors
 ai/models/best_model/model_checkpoint.pt
+ai/models/fine_tuned_model/model_checkpoint.pt

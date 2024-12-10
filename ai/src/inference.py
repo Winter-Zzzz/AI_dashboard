@@ -4,7 +4,7 @@ import json
 import re
 import torch
 from transformers import T5Tokenizer, T5ForConditionalGeneration
-from utils.simplified_filter_data import TransactionFilter
+from utils.filter_data import TransactionFilter
 
 from pathlib import Path
 from config.model_config import ModelConfig
@@ -65,7 +65,7 @@ def execute_code(code: str, data: dict):
         if code.startswith("txn."):
             code = f"txn = TransactionFilter(data).reset()\nresult = {code}\nprint(result)"
             
-        print("\n실행 결과:")
+        print("\n실행 결과 :")
         exec_globals = {
             "data": data,
             "TransactionFilter": TransactionFilter,
@@ -122,7 +122,8 @@ def interactive_session(model: T5ForConditionalGeneration, tokenizer: T5Tokenize
 def main():
     """메인 함수"""
     config = ModelConfig()  # 베이스 모델 이름을 위해 필요
-    model_path = os.path.join(PROJECT_ROOT, 'models', 'best_model')
+    model_path = os.path.join(PROJECT_ROOT, 'models', 'fine_tuned_model')
+    print(model_path)
     checkpoint_path = os.path.join(model_path, 'model_checkpoint.pt')
     
     # 경로 존재 확인
@@ -156,6 +157,13 @@ def main():
         model = model.to(DEVICE)
         
         print(f"학습된 모델 로딩 완료! (Device: {DEVICE})")
+
+        # 토크나이저 테스트
+        test_text ="Load 7 oldest transactions to dbd57ab0e947b8a96f0c84b48dead3a0c31ef822b8d442ea95ff53fc1a820dfed4d0caff5ef730b4ba38ef1074d15a966ef1a8aa02e089472838e5e898403c3161"
+        encoded = tokenizer.encode(test_text, return_tensors='pt')
+        decoded = tokenizer.decode(encoded[0])
+        print(f"Tokenizer test - Original: {test_text}")
+        print(f"Tokenizer test - Decoded: {decoded}")
         
         interactive_session(model, tokenizer, data)
 
