@@ -1,36 +1,37 @@
-from transformers import AutoTokenizer, T5ForConditionalGeneration, Trainer, TrainingArguments
-from torch.utils.data import Dataset, random_split
-from torch.cuda.amp import autocast
-import torch
-import json
-import logging
-import re
 import os
-from typing import Tuple
+import torch
+from tqdm import tqdm
+from transformers import T5ForConditionalGeneration, T5Tokenizer, T5Config
+from torch.optim import AdamW
+from torch.utils.data import Dataset, DataLoader
+from transformers import get_linear_schedule_with_warmup
+import matplotlib.pyplot as plt
+import datetime
+from torch.cuda.amp import GradScaler, autocast
+import json
 import sys
 
+
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(project_root)
-from src.config.fine_tuning_config import ModelConfig
+sys.path.append(os.path.join(project_root, 'ai', 'src'))
+
+from config.fine_tuning_config import ModelConfig
+from utils.data_loader import load_training_data
 
 class QueryDataset(Dataset):
-    def __init__(self, input_texts, output_texts, tokenizer, max_length=None):
-        self.config = ModelConfig()
-        self.tokenizer = tokenizer
-        self.max_length = max_length or self.config.MAX_INPUT_LENGTH
+    def __init__(self, input_texts, output_texts, tokenizer, max_length):
         self.input_texts = input_texts
         self.output_texts = output_texts
-        self.patterns = {name: re.compile(pattern) for name, pattern in self.config.PATTERNS.items()}
+        self.tokenizer = tokenizer
+        self.max_length = max_length
 
     def __len__(self):
         return len(self.input_texts)
 
     def __getitem__(self, idx):
-        # 각 아이템마다 개별적으로 토크나이징 수행
-        input_text = self.process_text(self.input_texts[idx])
+        input_text = self.input_texts[idx]
         output_text = self.output_texts[idx]
 
-        # 입력 텍스트 토크나이징
         input_encoding = self.tokenizer(
             input_text,
             max_length=self.max_length,
@@ -39,7 +40,6 @@ class QueryDataset(Dataset):
             return_tensors="pt"
         )
 
-        # 출력 텍스트 토크나이징 - 특수 문자 유지
         target_encoding = self.tokenizer(
             output_text,
             max_length=self.max_length,
@@ -54,250 +54,268 @@ class QueryDataset(Dataset):
             'labels': target_encoding.input_ids.squeeze(0)
         }
 
-    def process_text(self, text: str) -> str:
-        """텍스트 전처리 - 단어 간 공백 정규화 및 패턴 매칭"""
-        text = ' '.join(text.split())
-        
-        matches_info = []
-        for pattern_name, pattern in self.patterns.items():
-            for match in pattern.finditer(text):
-                matches_info.append({
-                    'start': match.start(),
-                    'end': match.end(),
-                    'pattern_name': pattern_name,
-                    'matched_text': match.group().strip()
-                })
-        
-        matches_info.sort(key=lambda x: x['start'], reverse=True)
-        
-        for match_info in matches_info:
-            tag_start = f"<{match_info['pattern_name']}>"
-            tag_end = f"</{match_info['pattern_name']}>"
-            tagged_text = f"{tag_start}{match_info['matched_text']}{tag_end}"
-            tagged_text = ''.join(tagged_text.split())
-            
-            text = (
-                text[:match_info['start']] +
-                tagged_text +
-                text[match_info['end']:]
-            )
-        
-        return text
-
     @staticmethod
     def remove_special_tokens(text: str) -> str:
-        """특수 토큰 제거"""
+        """<pad>와 </s> 토큰 제거"""
         return text.replace('<pad>', '').replace('</s>', '').replace('<unk>', '')
-
+    
     @staticmethod
     def remove_all_spaces(text: str) -> str:
-        """모든 공백 제거"""
+        """모든 종류의 공백 문자 제거"""
         return ''.join(text.split())
+    
+    @staticmethod
+    def normalize_spaces(text: str) -> str:
+        """연속된 공백을 하나의 공백으로 반환"""
+        return ' '.join(text.split())
 
-class QueryParserFineTuner:
-    def __init__(self, model_path: str = None):
-        self.config = ModelConfig()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+class TrainingTracker:
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        self.status_file = os.path.join(self.log_dir, 'training_status.json')
+
+        if os.path.exists(self.status_file):
+            with open(self.status_file, 'r') as f:
+                status = json.load(f)
+                self.best_loss = status.get('best_loss', float('inf'))
+        else:
+            self.best_loss = float('inf')
+            
+        self.training_history = {
+            'epochs': [],
+            'train_loss': [],
+            'improvement': [],
+        }
+        self.best_loss = float('inf')
+    
+    def update(self, epoch, train_loss):
+        self.training_history['epochs'].append(epoch)
+        self.training_history['train_loss'].append(train_loss)
         
-        try:
-            if self.config.USE_BASE_MODEL and os.path.exists(self.config.BASE_MODEL_PATH):
-                model_path = self.config.BASE_MODEL_PATH
-                logging.info(f"Loading trained model from {model_path}")
-            else:
-                model_path = model_path or self.config.MODEL_NAME
-                logging.info(f"Loading base model: {model_path}")
-            
-            # 토크나이저와 모델 로드
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            self.model = T5ForConditionalGeneration.from_pretrained(model_path)
-            
-            # 현재 특수 토큰 확인
-            logging.info("Current special tokens:")
-            logging.info(self.tokenizer.special_tokens_map)
-            logging.info(f"Vocabulary size: {len(self.tokenizer)}")
-            
-            # Fine-tuning을 위한 레이어 선택적 동결
-            self.freeze_base_layers()
-
-            self.model = self.model.to(self.device)
-            
-        except Exception as e:
-            logging.error(f"Failed to load model: {str(e)}")
-            raise
+        improved = train_loss < self.best_loss
+        self.training_history['improvement'].append(improved)
+        if improved:
+            self.best_loss = train_loss
         
-        torch.cuda.empty_cache()
-
-    def freeze_base_layers(self):
-        """기본 레이어는 동결하고 마지막 몇 개 레이어만 학습하도록 설정"""
-        encoder_layers = self.model.encoder.block
-        num_layers = len(encoder_layers)
-        layers_to_freeze = int(0.75 * num_layers)
+        self.plot_progress()
+        self.save_status()
         
-        for i in range(layers_to_freeze):
-            for param in encoder_layers[i].parameters():
-                param.requires_grad = False
-                
-        logging.info(f"Frozen {layers_to_freeze} encoder layers out of {num_layers}")
-
-    def validate_tokens(self, sample_text: str):
-        """토큰화 결과 검증"""
-        tokens = self.tokenizer.tokenize(sample_text)
-        logging.info(f"\nSample text: {sample_text}")
-        logging.info(f"Tokenized: {tokens}")
-        return tokens
-
-    def prepare_dataset(self, data_path: str = None, eval_split: float = 0.2) -> Tuple[Dataset, Dataset]:
-        """데이터셋 준비 및 학습/검증 분할"""
-        data_path = data_path or self.config.DATA_PATH
-        with open(data_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        logging.info("Sample data format:")
-        for i, item in enumerate(data['dataset'][:3]):
-            logging.info(f"Input {i}: {item['input']}")
-            logging.info(f"Output {i}: {item['output']}\n")
-            
-        texts = [item['input'] for item in data['dataset']]
-        labels = [item['output'] for item in data['dataset']]
+        return improved
+    
+    def plot_progress(self):
+        plt.figure(figsize=(12, 6))
+        plt.plot(self.training_history['epochs'], 
+                self.training_history['train_loss'], 
+                label='Training Loss', 
+                marker='o')
         
-        full_dataset = QueryDataset(texts, labels, self.tokenizer, max_length=self.config.MAX_INPUT_LENGTH)
+        improved_epochs = [e for i, e in enumerate(self.training_history['epochs']) 
+                         if self.training_history['improvement'][i]]
+        improved_losses = [l for i, l in enumerate(self.training_history['train_loss']) 
+                         if self.training_history['improvement'][i]]
         
-        dataset_size = len(full_dataset)
-        eval_size = int(dataset_size * eval_split)
-        train_size = dataset_size - eval_size
+        if improved_epochs:
+            plt.scatter(improved_epochs, improved_losses, 
+                       color='green', s=100, 
+                       label='Improvement', 
+                       zorder=5)
         
-        train_dataset, eval_dataset = random_split(
-            full_dataset, 
-            [train_size, eval_size],
-            generator=torch.Generator().manual_seed(42)
-        )
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training Progress')
+        plt.legend()
+        plt.grid(True)
         
-        logging.info(f"Training set size: {len(train_dataset)}")
-        logging.info(f"Evaluation set size: {len(eval_dataset)}")
+        # 현재 시간 추가하여 훈련 진행 그래프 파일명 설정
+        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+        epoch_progress_file = os.path.join(self.log_dir, f'training_progress_{current_time}.png')
+        plt.savefig(epoch_progress_file)
+        plt.close()
+    
+    def save_status(self):
+        status = {
+            'current_epoch': self.training_history['epochs'][-1],
+            'best_loss': self.best_loss,
+            'last_train_loss': self.training_history['train_loss'][-1],
+            'total_improvements': sum(self.training_history['improvement'])
+        }
         
-        return train_dataset, eval_dataset
+        # 에포크 번호를 파일명에 추가하여 훈련 상태 저장
+        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+        epoch_status_file = os.path.join(self.log_dir, f'training_status_epoch_{epoch}_{current_time}.json')
+        with open(epoch_status_file, 'w') as f:
+            json.dump(status, f, indent=4)
 
-    def train(self, train_dataset, eval_dataset):
-        """모델 파인튜닝"""
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = os.path.join(self.config.OUTPUT_DIR, f"checkpoint_{timestamp}")
-        os.makedirs(output_dir, exist_ok=True)
-
-        eval_steps = max(len(train_dataset) // (self.config.BATCH_SIZE * 5), 1)
-        
-        training_args = TrainingArguments(
-            output_dir=output_dir,
-            num_train_epochs=self.config.NUM_EPOCHS,
-            per_device_train_batch_size=self.config.BATCH_SIZE,
-            per_device_eval_batch_size=self.config.BATCH_SIZE,
-            learning_rate=self.config.LEARNING_RATE,
-            warmup_ratio=self.config.WARMUP_RATIO,
-            weight_decay=self.config.WEIGHT_DECAY,
-            logging_dir=self.config.LOGGING_DIR,
-            logging_steps=self.config.LOGGING_STEPS,
-            save_strategy=self.config.SAVE_STRATEGY,
-            save_steps=eval_steps,
-            eval_strategy=self.config.EVAL_STRATEGY,
-            eval_steps=eval_steps,
-            load_best_model_at_end=True,
-            metric_for_best_model="eval_loss",
-            greater_is_better=False,
-            gradient_accumulation_steps=self.config.ACCUMULATION_STEPS,
-            max_grad_norm=self.config.GRADIENT_CLIP,
-            save_total_limit=1,
-            report_to="none",
-            fp16=self.config.FP16,
-            dataloader_num_workers=self.config.NUM_WORKERS,
-            dataloader_pin_memory=self.config.PIN_MEMORY,
-        )
-
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=eval_dataset,
-            tokenizer=self.tokenizer,
-        )
-
-        try:
-            logging.info("Starting fine-tuning...")
-            
-            # Trainer에 의해 관리되는 단일 학습 호출
-            train_result = trainer.train()
-            metrics = train_result.metrics
-            
-            # 최종 평가
-            eval_metrics = trainer.evaluate()
-            
-            # 결과 로깅
-            logging.info("Training completed!")
-            logging.info(f"Final training metrics: {metrics}")
-            logging.info(f"Final evaluation metrics: {eval_metrics}")
-            
-            # 최종 모델 저장
-            trainer.save_model(os.path.join(output_dir, 'final_model'))
-            
-            # 샘플 예측으로 결과 확인
-            self.test_predictions(eval_dataset, n_samples=3)
-            
-        except Exception as e:
-            logging.error(f"Fine-tuning failed: {str(e)}")
-            raise
+def fine_tune_model():
+    config = ModelConfig()  # 이 부분을 먼저 선언
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    
+    # 모델 디렉토리 및 checkpoint 경로 설정
+    model_dir = os.path.join(project_root, 'models', 'best_model')
+    checkpoint_path = os.path.join(model_dir, "model_checkpoint.pt")
+    
+    # 토크나이저를 모델 디렉토리에서 직접 로드
+    tokenizer = T5Tokenizer.from_pretrained(model_dir)
+    print(f"Loaded tokenizer from {model_dir}")
+    
+    # 체크포인트 로드
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    
+    # 체크포인트에 맞춰 모델 초기화
+    t5_config = T5Config.from_pretrained('t5-small')
+    t5_config.vocab_size = config.VOCAB_SIZE  # ModelConfig의 값 사용
+    
+    model = T5ForConditionalGeneration(t5_config)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.to(device)
 
 
-    def test_predictions(self, eval_dataset, n_samples=3):
-        """샘플 데이터로 예측 테스트"""
-        indices = torch.randperm(len(eval_dataset))[:n_samples]
-        
-        logging.info("\nTest Predictions:")
-        for idx in indices:
-            example = eval_dataset[idx]
-            input_text = self.tokenizer.decode(example['input_ids'], skip_special_tokens=True)
-            target_text = self.tokenizer.decode(example['labels'], skip_special_tokens=True)
-            
-            # 예측 수행
-            predicted_text = self.predict(input_text)
-            
-            logging.info(f"\nInput: {input_text}")
-            logging.info(f"Target: {target_text}")
-            logging.info(f"Predicted: {predicted_text}")
+    # 토크나이저 테스트
+    test_text ="Load 7 oldest transactions to dbd57ab0e947b8a96f0c84b48dead3a0c31ef822b8d442ea95ff53fc1a820dfed4d0caff5ef730b4ba38ef1074d15a966ef1a8aa02e089472838e5e898403c3161",
+    encoded = tokenizer.encode(test_text, return_tensors='pt')
+    decoded = tokenizer.decode(encoded[0])
+    print(f"Tokenizer test - Original: {test_text}")
+    print(f"Tokenizer test - Decoded: {decoded}")
 
-    def predict(self, query: str) -> str:
-        """최적화된 예측 함수"""
-        self.model.eval()
-        inputs = self.tokenizer(
-            query,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=self.config.MAX_INPUT_LENGTH
-        ).to(self.device)
+    # 데이터셋 로드
+    data_file = os.path.join(project_root, 'data', 'augmented', 'simplified_augmented_dataset.json')
+    input_texts, output_texts = load_training_data(data_file)
+    
+    if len(input_texts) == 0 or len(output_texts) == 0:
+        return None, None
 
-        with torch.no_grad(), autocast(enabled=True):
-            outputs = self.model.generate(
-                inputs["input_ids"],
-                max_length=self.config.MAX_LENGTH,
-                num_beams=4,
-                length_penalty=1.0,
-                early_stopping=True,
-                no_repeat_ngram_size=2
-            )
-
-        return self.tokenizer.decode(outputs[0], skip_special_tokens=False)
-
-def main():
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+    # 데이터셋 설정
+    train_dataset = QueryDataset(input_texts, output_texts, tokenizer, config.MAX_LENGTH)
+    train_dataloader = DataLoader(
+        train_dataset, 
+        batch_size=config.BATCH_SIZE, 
+        shuffle=True, 
+        num_workers=2, 
+        pin_memory=True if torch.cuda.is_available() else False
     )
+
+    # optimizer 초기화 및 상태 로드
+    optimizer = AdamW(
+        model.parameters(), 
+        lr=config.LEARNING_RATE,
+        weight_decay=config.WEIGHT_DECAY, 
+        eps=1e-8
+    )
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    # scheduler 초기화 및 상태 로드
+    total_steps = len(train_dataloader) * config.NUM_EPOCHS
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=int(total_steps * 0.1),
+        num_training_steps=total_steps
+    )
+    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
+    # scaler 초기화 및 상태 로드
+    scaler = GradScaler()
+    scaler.load_state_dict(checkpoint['scaler_state_dict'])
+
+    # 훈련 상태 추적기 초기화
+    tracker = TrainingTracker(os.path.join(project_root, 'logs'))
     
-    tuner = QueryParserFineTuner()
-    train_dataset, eval_dataset = tuner.prepare_dataset()
-    tuner.train(train_dataset, eval_dataset)
+    # early stopping 관련 변수 초기화
+    patience = config.PATIENCE
+    no_improve = 0
+    start_epoch = checkpoint['epoch'] + 1
+    best_loss = float('inf')
+
+    print("🚀 Resuming fine-tuning from epoch", start_epoch)
     
+    # 여기서부터 training loop 시작 (기존 epoch 루프를 start_epoch부터 시작)
+    for epoch in range(start_epoch, start_epoch + config.NUM_EPOCHS):
+        model.train()
+        total_train_loss = 0
+        train_steps = 0
+        
+        progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}")
+        optimizer.zero_grad()
+
+        for i, batch in enumerate(progress_bar):
+            with autocast(device_type='cuda'):
+                output = model(
+                    input_ids=batch['input_ids'].to(device),
+                    attention_mask=batch['attention_mask'].to(device), 
+                    labels=batch['labels'].to(device)
+                )
+            
+                loss = output.loss / config.ACCUMULATION_STEPS
+            
+            scaler.scale(loss).backward()
+
+            if (i + 1) % config.ACCUMULATION_STEPS == 0:
+                scaler.unscale_(optimizer)  # 그래디언트 클리핑 전에 스케일링 해제
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRADIENT_CLIP)
+                scaler.step(optimizer)  # Optimizer 업데이트
+                scaler.update()  # 스케일러 업데이트
+                scheduler.step()  # 스케줄러 업데이트
+                optimizer.zero_grad()
+
+            # 실제 손실값 저장
+            total_train_loss += loss.item() * config.ACCUMULATION_STEPS
+            train_steps += 1
+
+            # 진행 상황 표시
+            progress_bar.set_postfix({
+                'loss': f'{loss.item() * config.ACCUMULATION_STEPS:.4f}',
+                'lr': f'{scheduler.get_last_lr()[0]:.2e}'
+            })
+        
+        avg_train_loss = total_train_loss / train_steps
+
+        print(f"\nEpoch {epoch+1}")
+        print(f"Average Training Loss: {avg_train_loss:.4f}")
+
+        # 트래커에 저장
+        improved = tracker.update(epoch + 1, avg_train_loss)
+        
+        if improved:
+            print(f"✨ New best loss achieved!")
+            # 모델 저장
+            checkpoint = {
+                'model_state_dict': model.state_dict(),
+                'tokenizer_vocab': tokenizer.get_vocab(),  # 어휘 저장
+                'tokenizer_special_tokens_map': tokenizer.special_tokens_map,  # 특수 토큰 맵 저장
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'scaler_state_dict': scaler.state_dict(),
+                'epoch': epoch,
+                'loss': avg_train_loss,
+            }
+
+            output_dir = os.path.join(project_root, 'models', 'fine_tuned_model')
+            os.makedirs(output_dir, exist_ok=True)
+            torch.save(checkpoint, os.path.join(output_dir, 'model_checkpoint.pt'))
+            
+            model.config.save_pretrained(output_dir)
+            tokenizer.save_pretrained(output_dir)
+            
+            print(f"Saved checkpoint to {output_dir}")
+            no_improve = 0
+        else:
+            no_improve += 1
+            print(f"No improvement for {no_improve} epochs")
+            if no_improve >= patience:
+                print("🛑 Early stopping triggered!")
+                break
+
+
+    return model, tokenizer
+
+
 if __name__ == "__main__":
-    main()
+    os.makedirs('logs', exist_ok=True)
+    print("🚀 Starting fine-tuning process...")
+    model, tokenizer = fine_tune_model()
+
+    if model is not None and tokenizer is not None:
+        print("✅ Fine-tuning completed successfully!")
+    else:
+        print("❌ Fine-tuning failed!")

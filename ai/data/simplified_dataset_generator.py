@@ -288,8 +288,8 @@ class TransactionFilterDatasetGenerator:
         return len(self.dataset["dataset"])
 # Dataset 생성
 generator = TransactionFilterDatasetGenerator()
-dataset = generator.generate_dataset(800)
-total_size = generator.generate_most_recent_dataset(50)
+dataset = generator.generate_dataset(400)
+total_size = generator.generate_most_recent_dataset(25)
 print(total_size)
 
 
