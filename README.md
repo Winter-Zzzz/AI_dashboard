@@ -676,7 +676,7 @@ Response Format:
 ### Training Progress
 The model showed consistent improvement throughout the training process:
 
-![Training Progress]('https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true')
+![Training Progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress.png?raw=true)
 
 - Training loss decreased significantly from 2.4846 to 0.0099
 - Validation loss reduced from 0.9378 to 0.0070
@@ -700,7 +700,7 @@ After attempting model fine-tuning, we observed that the fine-tuned version did 
 
 Based on these results, we decided to proceed with the original pre-trained model, which demonstrated better stability and accuracy in query translation.
 
-![Fine-tuned Training Progress]('https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress_fine-tuned.png?raw=true')
+![Fine-tuned Training Progress](https://github.com/Winter-Zzzz/AI_dashboard/blob/main/image/training_progress_fine-tuned.png?raw=true)
 
 ### Performance Analysis of Original Model
 
