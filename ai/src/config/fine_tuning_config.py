@@ -13,7 +13,7 @@ class ModelConfig:
     BATCH_SIZE: int = 8           # 배치 크기
     LEARNING_RATE: float = 1e-5   # 학습률
     WEIGHT_DECAY: float = 0.01    # 가중치 감쇠 (L2 정규화)
-    NUM_EPOCHS: int = 5           # 에폭 수
+    NUM_EPOCHS: int = 10           # 에폭 수
     PATIENCE: int = 3             # Early Stopping을 위한 patience
     
     # 생성 파라미터
@@ -43,7 +43,6 @@ class ModelConfig:
         
         # 데이터 관련 디렉토리
         self.DATA_DIR = os.path.join(self.PROJECT_ROOT, 'data')
-        self.AUGMENTED_DATA_DIR = os.path.join(self.DATA_DIR, 'augmented')
         
         # 로그 디렉토리
         self.LOG_DIR = os.path.join(self.PROJECT_ROOT, 'logs')
@@ -54,7 +53,6 @@ class ModelConfig:
             self.BEST_MODEL_DIR,
             self.FINETUNED_MODEL_DIR,
             self.DATA_DIR,
-            self.AUGMENTED_DATA_DIR,
             self.LOG_DIR
         ]:
             os.makedirs(directory, exist_ok=True)

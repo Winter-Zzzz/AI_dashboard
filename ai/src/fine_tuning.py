@@ -6,14 +6,20 @@ from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader
 from transformers import get_linear_schedule_with_warmup
 import matplotlib.pyplot as plt
-import datetime
+from datetime import datetime
 from torch.cuda.amp import GradScaler, autocast
 import json
 import sys
 
-
+import os
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(os.path.join(project_root, 'ai', 'src'))
+
+sys.path.append(os.path.join(project_root, 'ai', 'src'))  # ai/src 경로 추가
+
+# ai 디렉토리 내부의 logs 및 models 폴더 생성
+os.makedirs(os.path.join(project_root, 'logs'), exist_ok=True)
+os.makedirs(os.path.join(project_root, 'models'), exist_ok=True)
+
 
 from config.fine_tuning_config import ModelConfig
 from utils.data_loader import load_training_data
@@ -99,7 +105,7 @@ class TrainingTracker:
             self.best_loss = train_loss
         
         self.plot_progress()
-        self.save_status()
+        self.save_status(epoch)
         
         return improved
     
@@ -129,11 +135,11 @@ class TrainingTracker:
         
         # 현재 시간 추가하여 훈련 진행 그래프 파일명 설정
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-        epoch_progress_file = os.path.join(self.log_dir, f'training_progress_{current_time}.png')
+        epoch_progress_file = f'training_progress_{current_time}.png'        
         plt.savefig(epoch_progress_file)
         plt.close()
     
-    def save_status(self):
+    def save_status(self, epoch):
         status = {
             'current_epoch': self.training_history['epochs'][-1],
             'best_loss': self.best_loss,
@@ -144,6 +150,8 @@ class TrainingTracker:
         # 에포크 번호를 파일명에 추가하여 훈련 상태 저장
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
         epoch_status_file = os.path.join(self.log_dir, f'training_status_epoch_{epoch}_{current_time}.json')
+        os.makedirs(os.path.join(project_root, 'logs', os.path.dirname(epoch_status_file), exist_ok=True))
+
         with open(epoch_status_file, 'w') as f:
             json.dump(status, f, indent=4)
 
@@ -151,26 +159,35 @@ def fine_tune_model():
     config = ModelConfig()  # 이 부분을 먼저 선언
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
+
+    model_path = os.path.join(project_root, 'models', 'fine_tuned_model')
     
     # 모델 디렉토리 및 checkpoint 경로 설정
     model_dir = os.path.join(project_root, 'models', 'best_model')
     checkpoint_path = os.path.join(model_dir, "model_checkpoint.pt")
     
-    # 토크나이저를 모델 디렉토리에서 직접 로드
+    # 경로 존재 확인
+    if not os.path.exists(model_path):
+        print(f"모델 디렉토리가 존재하지 않습니다: {model_path}")
+        print("먼저 train.py를 실행하여 모델을 학습해주세요.")
+        return
+        
+    if not os.path.exists(checkpoint_path):
+        print(f"체크포인트 파일이 존재하지 않습니다: {checkpoint_path}")
+        print("먼저 train.py를 실행하여 모델을 학습해주세요.")
+        return
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     tokenizer = T5Tokenizer.from_pretrained(model_dir)
     print(f"Loaded tokenizer from {model_dir}")
     
     # 체크포인트 로드
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    
-    # 체크포인트에 맞춰 모델 초기화
-    t5_config = T5Config.from_pretrained('t5-small')
-    t5_config.vocab_size = config.VOCAB_SIZE  # ModelConfig의 값 사용
-    
-    model = T5ForConditionalGeneration(t5_config)
+    model.resize_token_embeddings(len(tokenizer))
     model.load_state_dict(checkpoint['model_state_dict'])
-    model.to(device)
-
+    model = model.to(device)
+        
+    print(f"학습된 모델 로딩 완료! (Device: {device})")
 
     # 토크나이저 테스트
     test_text ="Load 7 oldest transactions to dbd57ab0e947b8a96f0c84b48dead3a0c31ef822b8d442ea95ff53fc1a820dfed4d0caff5ef730b4ba38ef1074d15a966ef1a8aa02e089472838e5e898403c3161",
@@ -180,7 +197,7 @@ def fine_tune_model():
     print(f"Tokenizer test - Decoded: {decoded}")
 
     # 데이터셋 로드
-    data_file = os.path.join(project_root, 'data', 'augmented', 'simplified_augmented_dataset.json')
+    data_file = os.path.join(project_root, 'data', 'augmented_dataset.json')
     input_texts, output_texts = load_training_data(data_file)
     
     if len(input_texts) == 0 or len(output_texts) == 0:
@@ -239,7 +256,7 @@ def fine_tune_model():
         optimizer.zero_grad()
 
         for i, batch in enumerate(progress_bar):
-            with autocast(device_type='cuda'):
+            with autocast():
                 output = model(
                     input_ids=batch['input_ids'].to(device),
                     attention_mask=batch['attention_mask'].to(device), 
@@ -298,6 +315,7 @@ def fine_tune_model():
             tokenizer.save_pretrained(output_dir)
             
             print(f"Saved checkpoint to {output_dir}")
+            tracker.save_status(epoch+1)
             no_improve = 0
         else:
             no_improve += 1
@@ -307,11 +325,10 @@ def fine_tune_model():
                 break
 
 
-    return model, tokenizer
+    return model, tokenizer 
 
 
 if __name__ == "__main__":
-    os.makedirs('logs', exist_ok=True)
     print("🚀 Starting fine-tuning process...")
     model, tokenizer = fine_tune_model()
 

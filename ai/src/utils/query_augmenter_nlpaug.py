@@ -148,8 +148,8 @@ if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(current_dir, '../../..'))
     
-    raw_data_path = os.path.join(project_root, 'ai', 'data', 'raw', 'simplified_generated_dataset.json')
-    augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented', 'simplified_augmented_dataset.json')
+    raw_data_path = os.path.join(project_root, 'ai', 'data', 'augmentation_template_dataset.json')
+    augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented_dataset.json')
     
     logging.info(f"Looking for raw data at: {raw_data_path}")
 

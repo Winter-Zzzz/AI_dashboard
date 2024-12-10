@@ -179,8 +179,8 @@ if __name__ == "__main__":
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
         sys.path.append(project_root)
 
-        raw_data_path = os.path.join(project_root, 'ai', 'data', 'raw', 'simplified_generated_dataset.json')
-        augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented', 'openllama_dataset.json')
+        raw_data_path = os.path.join(project_root, 'ai', 'data', 'augmentation_template_dataset.json')
+        augmented_data_path = os.path.join(project_root, 'ai', 'data', 'augmented.json')
 
         with open(raw_data_path, 'r') as f:
             original_dataset = json.load(f)
